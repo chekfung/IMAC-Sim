@@ -20,7 +20,7 @@ spice_dir='spice' #The directory where spice files are located
 dataset_file='test_data.csv' #Name of the dataset file
 label_file='test_labels.csv' #Name of the label file
 weight_var=0.0 #percentage variation in the resistance of the synapses
-testnum=2 #Number of input test cases to run
+testnum=4 #Number of input test cases to run
 testnum_per_batch=2 #Number of test cases in a single batch, testnum should be divisible by this number
 firstimage=0 #start the test inputs from this image
 vdd=0.8 #The positive supply voltage
@@ -90,6 +90,24 @@ def update_diff (gain, LayerNUM):
     ff.writelines(data)
     ff.close()
 
+
+def min_max_normalization(vector):
+    """
+    Performs min-max normalization on the input vector, scaling its values to the range [0, 1].
+
+    Parameters:
+    - vector: NumPy array or list containing the values to be normalized.
+
+    Returns:
+    - normalized: The normalized vector.
+    - global_min: The minimum value of the original vector.
+    - global_max: The maximum value of the original vector.
+    """
+    global_min = np.min(vector)
+    global_max = np.max(vector)
+    normalized = (vector - global_min) / (global_max - global_min)
+
+    return normalized, global_min, global_max
 
 #function to extract the measured average voltage or power from time1 to time2 in the output text file genrated by SPICE
 def findavg (line):
@@ -179,6 +197,17 @@ testimage=firstimage
 err=[] #the array containing error information for each test case
 pwr_list=[] #the array containing power information for each test case
 
+# Create CSV to store eveything :)
+csv_name = 'inference_metrics_with_labels.csv'
+headers = ['image_num', 'golden_label', 'predicted_label', 'energy'] + \
+          [f'output{j}' for j in range(10)] + \
+          [f'latency{j}' for j in range(10)] 
+
+file = open(csv_name, mode='w', newline='')
+writer = csv.writer(file)
+writer.writerow(headers)
+
+
 for i in range(batch):
     out_list=[]
     label_list=[]
@@ -218,39 +247,93 @@ for i in range(batch):
 
     # Read psf file
     sim_obj = read_simulation_file('spice/classifier.psf', simulator='hspice')
-    print_signal_names(sim_obj)
-
     time_vec = get_signal('time', sim_obj, simulator='hspice')
-    
     plt.figure(0)
 
+    for j in range(testnum_per_batch):
+        real_image_id = image_num + j 
+
+        start_of_event = j * (tsampling * 10**-9)
+        end_of_event = (j+1) * (tsampling *10**-9)
+
+        # Convert to the indices that work with our SPICE simulation.
+        bounds_mask = (time_vec >= start_of_event) & (time_vec <= end_of_event)
+        valid_timestep_indices = np.where(bounds_mask)
+
+        # Fix the end index to be plus one (so that we slightly overlap things.)
+        start_index = valid_timestep_indices[0][0]  
+        end_index_i = valid_timestep_indices[0][-1]+1
+        end_index = np.min([end_index_i, len(time_vec)-1])      # Join the end of the index with the start of the new guy :)
+
+        latencies = []
+
+        for k in range(10):
+            output_signal = get_signal(f'output{k}', sim_obj, simulator='hspice')
+            subset_output = output_signal[start_index:end_index]
+            normalized_output, _, _ = min_max_normalization(subset_output)
+            subset_grad_moo = np.abs(np.diff(normalized_output))
+            subset_grad_moo = np.append(subset_grad_moo, 0)
+            first_zero = np.argmax(subset_grad_moo)  # Plus one due to movement by 1 due to np.dif
+            end_dynamic = start_index + first_zero
+            event_latency = time_vec[end_dynamic] - time_vec[start_index]
+            latencies.append(event_latency)
+            
+            print(f"Batch: {i}, Img: {j} / {testnum_per_batch}, Output: {k}, Latency: {event_latency * 10**9} ns")
 
 
-        
-    for j in range (testnum_per_batch):
-        print(j+image_num+1)
-        print(f'Actual label: {label_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)]}')
+        # Compute Output Voltages and labels
+        actual_label = np.argmax(label_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)])
+        print(f'Actual label: {actual_label}')
         err.append(int(0))
         list_max=max(out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)])
-        print(f'Output voltages: {out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)]}')
-        #print(list_max)
+
+        out_voltages = [out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)]][0]
+        print(f'Output voltages: {out_voltages}')
+
         for k in range (nodes[len(nodes)-1]):
+            # Convert to Max
             if (out_list[nodes[len(nodes)-1]*j+k]==list_max):    # the neuron generating maximum output value represents the corrosponding class
                 out_list[nodes[len(nodes)-1]*j+k]=1.0
             else:
                 out_list[nodes[len(nodes)-1]*j+k]=0.0
+
+            # Compute Error
             if (err[j+image_num]==0):
                 if (out_list[nodes[len(nodes)-1]*j+k] != label_list[nodes[len(nodes)-1]*j+k]):
                     err[j+image_num]=1
-        print(f'Predicted label: {out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)]}')
+        
+        predicted_label = np.argmax(out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)])
+        print(f'Predicted label: {predicted_label}')
+
+        # Print correct or not
         if err[j+image_num]==1:
             print("Wrong prediction!")
         else:
             print("Correct prediction")
-        print("Energy consumption = %f pJ"%float(pwr_list[j+image_num]))
+
+        energy_consumed = float(pwr_list[j+image_num])
+        print("Energy consumption = %f pJ"%energy_consumed)
         print("sum error= %d"%(sum(err)))
+
+        row = [real_image_id] + [actual_label] + [predicted_label] + [energy_consumed* 10**-12] + out_voltages + latencies
+        print(row)
+        writer.writerow(row)
+    
+    # for j in range(10):
+    #     output_signal = get_signal(f'output{j}', sim_obj, simulator='hspice')
+    #     plt.plot(time_vec * 10**9, output_signal, label=f'output{j}')
+    
+    # plt.title("Output")
+    # plt.ylabel("Output Voltage")
+    # plt.xlabel("Time (ns)")
+    # plt.legend()
+    # plt.show()
+
     image_num = image_num + testnum_per_batch
     testimage = testimage + testnum_per_batch
+
+file.close()
+print(f"CSV Created: {csv_name}")
 
 #Area Calculation
 xbar_num = sum(np.multiply(hpar, vpar))
