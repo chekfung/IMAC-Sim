@@ -14,15 +14,17 @@ import matplotlib.pyplot as plt
 
 start = time.time()
 
+testnum=1000 #Number of input test cases to run
+testnum_per_batch=10 #Number of test cases in a single batch, testnum should be divisible by this number
+firstimage=0 #start the test inputs from this image
+csv_name = 'inference_metrics_with_labels_0_999.csv'
+
 #list of inputs start
 data_dir='data' #The directory where data files are located
 spice_dir='spice' #The directory where spice files are located
 dataset_file='test_data.csv' #Name of the dataset file
 label_file='test_labels.csv' #Name of the label file
 weight_var=0.0 #percentage variation in the resistance of the synapses
-testnum=4 #Number of input test cases to run
-testnum_per_batch=2 #Number of test cases in a single batch, testnum should be divisible by this number
-firstimage=0 #start the test inputs from this image
 vdd=0.8 #The positive supply voltage
 vss=-0.8 #The negative supply voltage
 tsampling=4 #The sampling time in nanosecond    # FIXME: Change this to 5ns later on :)
@@ -198,7 +200,6 @@ err=[] #the array containing error information for each test case
 pwr_list=[] #the array containing power information for each test case
 
 # Create CSV to store eveything :)
-csv_name = 'inference_metrics_with_labels.csv'
 headers = ['image_num', 'golden_label', 'predicted_label', 'energy'] + \
           [f'output{j}' for j in range(10)] + \
           [f'latency{j}' for j in range(10)] 
@@ -278,7 +279,7 @@ for i in range(batch):
             event_latency = time_vec[end_dynamic] - time_vec[start_index]
             latencies.append(event_latency)
             
-            print(f"Batch: {i}, Img: {j} / {testnum_per_batch}, Output: {k}, Latency: {event_latency * 10**9} ns")
+            #print(f"Batch: {i}, Img: {j} / {testnum_per_batch}, Output: {k}, Latency: {event_latency * 10**9} ns")
 
 
         # Compute Output Voltages and labels
@@ -316,7 +317,6 @@ for i in range(batch):
         print("sum error= %d"%(sum(err)))
 
         row = [real_image_id] + [actual_label] + [predicted_label] + [energy_consumed* 10**-12] + out_voltages + latencies
-        print(row)
         writer.writerow(row)
     
     # for j in range(10):
