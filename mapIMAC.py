@@ -9,7 +9,11 @@ def mapIMAC(nodes,length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testnum,da
     for x in range(len(nodes)-1):		
         f.write('.include diff'+str(x+1)+'.sp\n')
     f.write(".include 'neuron.sp'\n")
-    f.write(".option post\n")
+    #f.write(".option post \n") # Post causes everything to get spit out :)
+    f.write('.option ingold=2 artist=2 psf=2\n')
+    f.write('.OPTION DELMAX=1NS\n')
+    f.write('.option probe\n')
+    f.write('.probe v(output0) \n')
     f.write(".op\n")
     f.write(".PARAM VddVal=%f\n"%vdd)
     f.write(".PARAM VssVal=%f\n"%vss)
@@ -48,8 +52,13 @@ def mapIMAC(nodes,length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testnum,da
     f.write("\n\n\nvdd vdd 0 DC VddVal\n")
     f.write(".TRAN 0.1n %d*tsampling\n"%(testnum))
 
+    # Change to measure energy 
     for i in range(testnum):
-        f.write(".MEASURE TRAN pwr%d AVG POWER FROM=%d*tsampling+0.1n TO=%d*tsampling\n"%(i,i,i+1))
+        #f.write(".MEASURE TRAN pwr%d AVG POWER FROM=%d*tsampling+0.1n TO=%d*tsampling\n"%(i,i,i+1))
+        
+        #f.write(".MEASURE TRAN energy%d INTEG POWER FROM=%d*tsampling+0.1n TO=%d*tsampling\n"%(i,i,i+1))
+        f.write(".MEASURE TRAN total_energy%d INTEG 'abs(V(vdd)*I(vdd)) + abs(V(vss)*I(vss))' FROM=%d*tsampling TO=%d*tsampling\n"%(i,i,i+1))
+
 
     for i in range(testnum):
         for j in range(nodes[len(nodes)-1]):

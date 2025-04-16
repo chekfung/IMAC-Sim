@@ -1,0 +1,12 @@
+1. Convert everything to 784, 128, 10 so that we just have one
+   hidden layer. Does not matter the accuracy, just that we have this.
+2. Check out how they map to 32x32 because it might be just what we do?
+    - It is already what we have :)
+    - Need to include bias into our models :)
+3. Write training scripts for 784,128,10 and conversions to the binary
+   weights. (I am not quite sure how to do this, but we should do it anyways)
+4. Run IMAC-Sim for 10k image set :) and augment to get energy data
+5. Write scripts to get 32x32 and everything working for LASANA
+6. Run on LASANA, but I think we will just model the neuron in 
+   python? 
+7. Compare accuracy and energy :)

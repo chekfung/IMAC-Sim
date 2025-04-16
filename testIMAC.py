@@ -9,6 +9,8 @@ import mapIMAC
 import mapWB
 import numpy as np
 import csv
+from tools_helper import *
+import matplotlib.pyplot as plt 
 
 start = time.time()
 
@@ -18,12 +20,12 @@ spice_dir='spice' #The directory where spice files are located
 dataset_file='test_data.csv' #Name of the dataset file
 label_file='test_labels.csv' #Name of the label file
 weight_var=0.0 #percentage variation in the resistance of the synapses
-testnum=4 #Number of input test cases to run
+testnum=2 #Number of input test cases to run
 testnum_per_batch=2 #Number of test cases in a single batch, testnum should be divisible by this number
 firstimage=0 #start the test inputs from this image
 vdd=0.8 #The positive supply voltage
 vss=-0.8 #The negative supply voltage
-tsampling=1 #The sampling time in nanosecond
+tsampling=4 #The sampling time in nanosecond    # FIXME: Change this to 5ns later on :)
 nodes=[400,120,84,10] #Network Topology, an array which defines the DNN model size
 xbar=[32,32] #The crossbar size
 gain=[30,30,10] #Array for the differential amplifier gains of all hidden layers
@@ -36,8 +38,10 @@ W=12*tech_node #width of the bitcell
 D=5*tech_node #distance between I+ and I- lines
 eps = 20*8.854e-12 #permittivity of oxide
 rho = 1.9e-8 #resistivity of metal
-rlow=5e3 #Low resistance level of the memristive device
-rhigh=15e3 #High resistance level of the memristive device
+#rlow=5e3 #Low resistance level of the memristive device
+#rhigh=15e3 #High resistance level of the memristive device
+rlow=78000
+rhigh=202000
 #list of inputs end
 
 hpar=[math.ceil((x+1)/xbar[0]) for x in nodes] #Calculating the horizontal partitioning array for all hidden layers
@@ -165,7 +169,7 @@ label_r=open(data_dir+'/'+'testlabel.txt', "r")  # testlabel.txt includes the la
 data_all=data_r.readlines() #data_all contains all test images
 label_all=label_r.readlines() #label_all contains all labels
 length=len(nodes) #length contains the number of layers in DNN model
-#update_neuron(rlow,rhigh) #updates the resistances in the neuron
+update_neuron(rlow,rhigh) #updates the resistances in the neuron
 for i in range(len(nodes)-1):
     update_diff(gain[i],i+1) #updates the differential amplifier gains
 mapWB.mapWB(length,rlow,rhigh,nodes,data_dir,weight_var) #calling mapWB which sets the corresponding resistance value for weights and biases
@@ -187,6 +191,7 @@ for i in range(batch):
         sim_w.write("%f "%(float(data_sim[j])*vdd))	
     sim_w.close()
     mapIMAC.mapIMAC(nodes,length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testnum_per_batch,data_dir,spice_dir,vdd,vss,tsampling)
+    # TODO: Fix to write to classifier.sp new one each time with batch number and everything :)
     os.chdir(spice_dir)
     os.system('hspice classifier.sp > output.txt')
     os.chdir('..')
@@ -195,10 +200,32 @@ for i in range(batch):
         if 'vout' in line:
             vval=findat(line)
             out_list.append(float(vval))
-        if 'pwr' in line:
+        if 'energy' in line:
             pval=findavg(line)
-            pwr_list.append(pval)
+            print(pval)
+            pwr_list.append(float(pval) * 10**12)
     out_r.close()
+
+    ## Load in Everything for Latency calculation
+    # Convert .tr0 log to psf to read
+    cmd2 = f'psf -i spice/classifier.tr0 -o spice/classifier.psf'
+    exit_code = os.system(cmd2)
+
+    if exit_code != 0:
+        error_message = f"Error converting to PSF simulation #{int}, exit code: {exit_code}"
+        print(error_message)
+        exit()
+
+    # Read psf file
+    sim_obj = read_simulation_file('spice/classifier.psf', simulator='hspice')
+    print_signal_names(sim_obj)
+
+    time_vec = get_signal('time', sim_obj, simulator='hspice')
+    
+    plt.figure(0)
+
+
+
         
     for j in range (testnum_per_batch):
         print(j+image_num+1)
@@ -220,7 +247,7 @@ for i in range(batch):
             print("Wrong prediction!")
         else:
             print("Correct prediction")
-        print("Power consumption = %f"%float(pwr_list[j+image_num]))
+        print("Energy consumption = %f pJ"%float(pwr_list[j+image_num]))
         print("sum error= %d"%(sum(err)))
     image_num = image_num + testnum_per_batch
     testimage = testimage + testnum_per_batch
@@ -242,7 +269,7 @@ label_r.close()
 
 print("error rate = %f"%(sum(err)/float(testnum)))   #calculate error rate
 print("accuracy = %f%%"%(100-(sum(err)/float(testnum))*100))   #calculate accuracy
-print("average total power = %f"%(sum(float(x) for x in pwr_list)/float(testnum)))   #calculate average power consumption
+print("average total energy = %f pJ"%(sum(float(x) for x in pwr_list)/float(testnum)))   #calculate average power consumption
 
 
 
