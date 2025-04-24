@@ -10,3 +10,5 @@
 *.tr0*
 *output.txt
 *log*
+**/.DS_Store
+test_spice/*
