@@ -128,11 +128,11 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
             # Vertical refers to having to split up input into multiple :)
             # In our case, even though we will have the xbar_length x xbar_length, we will split to 32x1 for parallezability
             # Get vertical cuts length :)
-            new_range_low = vertical_cuts[y_id]-1
-            new_range_high = vertical_cuts[y_id+1]-1
+            new_range_low = vertical_cuts[y_id]
+            new_range_high = vertical_cuts[y_id+1]
+            new_range = (new_range_high - new_range_low)
 
-
-            for split_vpar in range(new_range_low, new_range_high):
+            for split_vpar in range(new_range):
                 file_template = f"partitioned_layer_{LayerNUM}_{x_id+1}_{y_id+1}_{split_vpar+1}.sp"
                 fd = open(os.path.join(spice_dir,file_template), "w")
 
@@ -156,18 +156,22 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
     posb_r=open(data_dir+'/'+'posbias'+str(LayerNUM)+".txt", "r")
     negb_r=open(data_dir+'/'+'negbias'+str(LayerNUM)+".txt", "r")
 
-
-    # Go through and write each of the files :)
-    # TODO:
-
-
     # Write Positive Array 
-    # FIXME: Last horizontal partition still needs the bias :)
     n_hpar=1 # horizontal partition number
     c=1 # column number
     r=1 # row number
+
+    low_resistance = np.inf
+    high_resistance = -np.inf
+
     for line in posw_r:
         if (float(line)!=0):
+            if float(line) < low_resistance:
+                low_resistance = float(line)
+            
+            if float(line) > high_resistance:
+                high_resistance = float(line)
+
             if (r < layer2+1):
                 # Calculate Indices :) (Row is vertical partitioning, while column is vertical partitioning)
                 y_id, split_r = find_partition(vertical_cuts, r)
@@ -176,10 +180,10 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
                 open_fd[(x_id, y_id, split_r)].write("Rwpos%d_%d in%d_%d sp%d_%d %f\n"% (split_c,split_r, split_c,split_r,split_c,split_r,float(line)))
 
                 #layer_w.write("Rwpos%d_%d_%d in%d_%d sp%d_%d %f\n"% (c,r, n_hpar, c,r,c,r,float(line)))
-                r+=1;
+                r+=1
             else:
-                c+=1;
-                r=1;
+                c+=1
+                r=1
                 if (c == int(layer1_wb*n_hpar/hpar+min((layer1_wb%hpar)/n_hpar,1)+1)):
                     print("positive increase horizontal partition")
                     print(f"row: {r}, col: {c}")
@@ -193,9 +197,29 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
 
                 open_fd[(x_id, y_id, split_r)].write("Rwpos%d_%d in%d_%d sp%d_%d %f\n"% (split_c,split_r, split_c,split_r,split_c,split_r,float(line)))
                 #layer_w.write("Rwpos%d_%d_%d in%d_%d sp%d_%d %f\n"% (c,r,n_hpar, c,r,c,r,float(line)))
-                r+=1;
+                r+=1
         else:
-            r+=1;
+            r+=1
+    
+    # Add the missing things to make it actually a Xbar_length x Xbar_length crossbar array (Note: for weight of 0, it is )
+    # Go through and write each of the files :)
+    for key, file in open_fd.items():
+        (x_id, y_id, split_r) = key
+
+        # Memristor ID to start on :)
+        low_index = horizontal_cuts[x_id] - horizontal_cuts[x_id-1]+1
+
+        # On last horizontal index, get rid of bias counting as one of the 32 inputs that we need to write.
+        if x_id == len(horizontal_cuts)-1:
+            low_index -= 1
+
+        high_index = xbar_length
+
+        open_fd[(x_id, y_id, split_r)].write("\n\n**********Positive Weighted Array Extras **********\n")
+
+        for new_c in range(low_index, high_index+1):
+            open_fd[(x_id, y_id, split_r)].write("Rwpos%d_%d in%d_%d sp%d_%d %f\n"% (new_c,split_r, new_c,split_r,new_c,split_r, low_resistance))
+
 
     # Write Negative Array
     for key, file in open_fd.items():
@@ -229,32 +253,128 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
                 #print(f"Row: {r}, Col: {c}, X_ID: {x_id}, Y_ID: {y_id}, X_PAR: {split_c}, Y_PAR: {split_r}")
                 open_fd[(x_id, y_id, split_r)].write("Rwneg%d_%d in%d_%d sn%d_%d %f\n"% (split_c,split_r,split_c,split_r,split_c,split_r,float(line)))
 
-
                 #layer_w.write("Rwneg%d_%d in%d_%d sn%d_%d %f\n"% (c,r,c,r,c,r,float(line)))
                 r+=1;
         else:
             r+=1;	
     
+    # Write the extras to pad to xbar_length x xbar_length
+    for key, file in open_fd.items():
+        (x_id, y_id, split_r) = key
 
-    # Write Bias (if applicable)
-    # writing the circuit for positive line biases
-    # This only applies for the last layer :)
-    # TODO: Start off here on the biases :)
-    layer_w.write("\n\n**********Positive Biases**********\n\n")
-    r=1
-    for line in posb_r:
-        if (float(line)!=0):
-            layer_w.write("Rbpos%d vd%d sp%d_%d %f\n"% (r,r,horizontal_cuts[-1],r,float(line)))
-            r+=1
-        else:
-            r+=1
+        # Memristor ID to start on :)
+        low_index = horizontal_cuts[x_id] - horizontal_cuts[x_id-1]+1
+
+        # On last horizontal index, get rid of bias counting as one of the 32 inputs that we need to write.
+        if x_id == len(horizontal_cuts)-1:
+            low_index -= 1
+
+        high_index = xbar_length
+
+        open_fd[(x_id, y_id, split_r)].write("\n\n**********Negative Weighted Array Extras **********\n")
+
+        for new_c in range(low_index, high_index+1):
+            open_fd[(x_id, y_id, split_r)].write("Rwneg%d_%d in%d_%d sp%d_%d %f\n"% (new_c,split_r, new_c,split_r,new_c,split_r, low_resistance))
 
 
-    # Write 
+    # Write 0 bias numbers for partitions where there is nothing happening :)
+    for i in range(hpar-1):
+        for y_id in range(vpar):
+            vpar_index = y_id+1
+
+            new_range_low = vertical_cuts[y_id]
+            new_range_high = vertical_cuts[y_id+1]
+            new_range = (new_range_high - new_range_low)
+
+            for split_vpar in range(new_range):
+                open_fd[(i+1, vpar_index, split_vpar+1)].write("\n\n**********Zero Positive Biases**********\n")
+                open_fd[(i+1, vpar_index, split_vpar+1)].write("Rbpos%d vd%d sp%d_%d %f\n"% (1,1,xbar_length+1,1, low_resistance))
+
+                open_fd[(i+1, vpar_index, split_vpar+1)].write("\n\n**********Zero Negative Biases**********\n")
+                open_fd[(i+1, vpar_index, split_vpar+1)].write("Rbneg%d vd%d sn%d_%d %f\n"% (1,1,xbar_length+1,1,low_resistance))
+
+                
+
+    # Biases need to be written for every vertical partition, but only for the last horizontal partition
+    for y_id in range(vpar):
+        vpar_index = y_id+1
+
+        new_range_low = vertical_cuts[y_id]
+        new_range_high = vertical_cuts[y_id+1]
+        new_range = (new_range_high - new_range_low)
+
+        for split_vpar in range(new_range):
+            # Write positive bias
+            open_fd[(hpar, vpar_index, split_vpar+1)].write("\n\n**********Positive Biases**********\n")
+
+            line = posb_r.readline()
+
+            if (float(line) != 0):
+                open_fd[(hpar, vpar_index, split_vpar+1)].write("Rbpos%d vd%d sp%d_%d %f\n"% (1,1,xbar_length+1,1,float(line)))
 
 
+            # Write negative bias
+            open_fd[(hpar, vpar_index, split_vpar+1)].write("\n\n**********Negative Biases**********\n")
+
+            line = negb_r.readline()
+
+            if (float(line) != 0):
+                open_fd[(hpar, vpar_index, split_vpar+1)].write("Rbneg%d vd%d sn%d_%d %f\n"% (1,1,xbar_length+1,1,float(line)))
 
 
+    # writing the circuit for vertical line parasitic resistances (only one vertical line for each row BTW)
+    parasitic_res = rho_new*W/(metal*T)
+
+    for key, file in open_fd.items():
+        (x_id, y_id, split_r) = key
+
+        file.write("\n\n**********Parasitic Resistances for Vertical Lines**********\n")
+        
+        for i in range(xbar_length+1):
+            n_vpar=1 # vertical partition number
+            c=i+1 # column number
+            for j in range(1):
+                r=j+1 # row number
+                if (i == xbar_length): # only for the bias line
+                    if (j == 0):
+                        file.write("Rbias%d vdd vd%d %f\n"% (r,r,parasitic_res))
+                
+                else: # the input connected vertical lines
+                    if (j == 0):
+                        file.write("Rin%d_%d in%d in%d_%d %f\n"% (c,r,c,c,split_r,parasitic_res))
+
+    # Write Horizontal Line Parasitic Resistances
+    hor_parasitic_res = rho_new*L/(metal*T)
+
+    for key, file in open_fd.items():
+        (x_id, y_id, split_r) = key
+
+        file.write("\n\n**********Parasitic Resistances for I+ and I- Lines****************\n")
+        n_hpar=1 # horizontal partition number
+        for i in range(xbar_length+1):
+            c=i+1 # column number
+            for j in range(1):
+                r=j+1 # row number
+                if (i == xbar_length):
+                    file.write("Rsp%d_%d sp%d_%d sp%d_p%d %f\n"% (c,r,c,r,r,n_hpar,hor_parasitic_res))
+                    file.write("Rsn%d_%d sn%d_%d sn%d_p%d %f\n"% (c,r,c,r,r,n_hpar,hor_parasitic_res))
+
+                else:
+                    file.write("Rsp%d_%d sp%d_%d sp%d_%d %f\n"% (c,r,c,r,c+1,r,hor_parasitic_res))
+                    file.write("Rsn%d_%d sn%d_%d sn%d_%d %f\n"% (c,r,c,r,c+1,r,hor_parasitic_res))
+
+    # Write Diff and then output
+    for key, file in open_fd.items():
+        (x_id, y_id, split_r) = key
+
+        # writing the circuit for Op-AMPS and connecting resistors
+        file.write("\n\n**********Weight Differntial Op-AMPS and Connecting Resistors****************\n")
+
+        file.write("XDIFFw%d_p%d sp%d_p%d sn%d_p%d nin%d_%d diff%d\n"% (1,1,1,1,1,1,1,1,LayerNUM))
+        file.write("Rconn%d_p%d nin%d_%d out%d 1m\n"% (1,1,1,1,1))
+
+        # Write end of the guy
+        file.write(f".ENDS layer{LayerNUM}_{x_id+1}_{y_id+1}_{split_r+1}")
 
 
     # Close All File Descriptors :)
@@ -275,199 +395,49 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
 
             
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    exit()
-
-
-
-
-
-
-                
-
-
-
-
-
-
-
-
-
-    # writing the circuit for positive line weights
-    layer_w.write("\n\n**********Positive Weighted Array**********\n")
-    n_hpar=1 # horizontal partition number
-    c=1 # column number
-    r=1 # row number
-    for line in posw_r:
-        if (float(line)!=0):
-            if (r < layer2+1):
-                layer_w.write("Rwpos%d_%d_%d in%d_%d sp%d_%d %f\n"% (c,r, n_hpar, c,r,c,r,float(line)))
-                r+=1;
-            else:
-                c+=1;
-                r=1;
-                if (c == int(layer1_wb*n_hpar/hpar+min((layer1_wb%hpar)/n_hpar,1)+1)):
-                    print("positive increase horizontal partition")
-                    print(f"row: {r}, col: {c}")
-                    n_hpar+=1
-                layer_w.write("Rwpos%d_%d_%d in%d_%d sp%d_%d %f\n"% (c,r,n_hpar, c,r,c,r,float(line)))
-                r+=1;
-        else:
-            r+=1;
-    
-    
-    # writing the circuit for negative line weights
-    layer_w.write("\n\n**********Negative Weighted Array**********\n\n")
-    n_hpar=1 # horizontal partition number
-    c=1 # column number
-    r=1 # row number
-    for line in negw_r:
-        if (float(line)!=0):
-            if (r < layer2+1):
-                layer_w.write("Rwneg%d_%d in%d_%d sn%d_%d %f\n"% (c,r,c,r,c,r,float(line)))
-                r+=1;
-            else:
-                c+=1;
-                r=1;
-                if (c == int(layer1_wb*n_hpar/hpar+min((layer1_wb%hpar)/n_hpar,1)+1)):
-                    n_hpar+=1
-                layer_w.write("Rwneg%d_%d in%d_%d sn%d_%d %f\n"% (c,r,c,r,c,r,float(line)))
-                r+=1;
-        else:
-            r+=1;	
-    
-    
-    # writing the circuit for positive line biases
-    layer_w.write("\n\n**********Positive Biases**********\n\n")
-    r=1
-    for line in posb_r:
-        if (float(line)!=0):
-            layer_w.write("Rbpos%d vd%d sp%d_%d %f\n"% (r,r,layer1_wb,r,float(line)))
-            r+=1
-        else:
-            r+=1
-    
-    
-    # writing the circuit for negative line biases
-    layer_w.write("\n\n**********Negative Biases**********\n\n")
-    r=1
-    for line in negb_r:
-        if (float(line)!=0):
-            layer_w.write("Rbneg%d vd%d sn%d_%d %f\n"% (r,r,layer1_wb,r,float(line)))
-            r+=1
-        else:
-            r+=1
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-    # writing the circuit for vertical line parasitic resistances
-    layer_w.write("\n\n**********Parasitic Resistances for Vertical Lines**********\n\n")
-    parasitic_res = rho_new*W/(metal*T)
-    for i in range(layer1_wb):
-        n_vpar=1 # vertical partition number
-        c=i+1 # column number
-        for j in range(layer2):
-            r=j+1 # row number
-            if (i == layer1): # only for the bias line
-                if (j == 0):
-                    layer_w.write("Rbias%d vdd vd%d %f\n"% (r,r,parasitic_res))
-                elif (j == int(layer2*n_vpar/vpar+min((layer2%vpar)/n_vpar,1))):
-                    layer_w.write("Rbias%d vdd vd%d %f\n"% (r,r,parasitic_res))
-                    n_vpar+=1
-                else:
-                    layer_w.write("Rbias%d vd%d vd%d %f\n"% (r,j,r,parasitic_res))
-            
-            else: # the input connected vertical lines
-                if (j == 0):
-                    layer_w.write("Rin%d_%d in%d in%d_%d %f\n"% (c,r,c,c,r,parasitic_res))
-                elif (j == int(layer2*n_vpar/vpar+min((layer2%vpar)/n_vpar,1))):
-                    layer_w.write("Rin%d_%d in%d in%d_%d %f\n"% (c,r,c,c,r,parasitic_res))
-                    n_vpar+=1
-                else:
-                    layer_w.write("Rin%d_%d in%d_%d in%d_%d %f\n"% (c,r,c,j,c,r,parasitic_res))
-    
-    # writing the circuit for horizontal line parasitic resistances
-    layer_w.write("\n\n**********Parasitic Resistances for I+ and I- Lines****************\n\n")
-    parasitic_res = rho_new*L/(metal*T)
-    n_hpar=1 # horizontal partition number
-    for i in range(layer1_wb):
-        c=i+1 # column number
-        for j in range(layer2):
-            r=j+1 # row number
-            if (i == int(layer1_wb*n_hpar/hpar+min((layer1_wb%hpar)/n_hpar,1)-1)):
-                if (i == layer1):
-                    layer_w.write("Rsp%d_%d sp%d_%d sp%d_p%d %f\n"% (c,r,c,r,r,n_hpar,parasitic_res))
-                    layer_w.write("Rsn%d_%d sn%d_%d sn%d_p%d %f\n"% (c,r,c,r,r,n_hpar,parasitic_res))
-                else:
-                    layer_w.write("Rsp%d_%d sp%d_%d sp%d_p%d %f\n"% (c,r,c,r,r,n_hpar,parasitic_res))
-                    layer_w.write("Rsn%d_%d sn%d_%d sn%d_p%d %f\n"% (c,r,c,r,r,n_hpar,parasitic_res))
-                    if (j == layer2-1):
-                        n_hpar+=1;
-            else:
-                layer_w.write("Rsp%d_%d sp%d_%d sp%d_%d %f\n"% (c,r,c,r,c+1,r,parasitic_res))
-                layer_w.write("Rsn%d_%d sn%d_%d sn%d_%d %f\n"% (c,r,c,r,c+1,r,parasitic_res))
-
-
-
-
-
-    # writing the circuit for Op-AMPS and connecting resistors
-    layer_w.write("\n\n**********Weight Differntial Op-AMPS and Connecting Resistors****************\n\n")
-    for i in range(hpar):
-        for j in range(layer2):
-            layer_w.write("XDIFFw%d_p%d sp%d_p%d sn%d_p%d nin%d_%d diff%d\n"% (j+1,i+1,j+1,i+1,j+1,i+1,j+1,i+1,LayerNUM))
-            layer_w.write("Rconn%d_p%d nin%d_%d nin%d 1m\n"% (j+1,i+1,j+1,i+1,j+1))
-    
-    
-    
-    # writing the circuit for neurons
-    layer_w.write("\n\n**********neurons****************\n\n")	
-    for i in range(layer2):
-        layer_w.write("Xsig%d nin%d out%d vdd 0 neuron\n"% (i+1,i+1,i+1))
-    
-    
-    layer_w.write(".ENDS layer"+ str(LayerNUM))
-    layer_w.close()
-
+# -------------
 # Test Function
-mapPartition(84, 10, 32, 3, 3, 1, 2.69999999997e-8, 2.2e-8, 2e-8, 1.35e-7, 1.08e-7, 4.5e-8, 1.77079999999e-10, 1.9e-8, 0, 'data', 'test_spice')
+# Layer 3
+layer_num = 3
+input_layer = 84
+output_layer = 10
+xbar_length = 32
+hpar = 3
+vpar = 1
+metal = 2.69999999997e-8
+T = 2.2e-8
+H = 2e-8
+L = 1.35e-7
+W = 1.08e-7
+D = 4.5e-8
+eps = 1.77079999999e-10
+rho = 1.9e-8
+weight_var = 0
+data_dir = 'data'
+spice_dir = 'test_spice'
+
+# Layer 2
+layer_num = 2
+input_layer = 120
+output_layer = 84
+xbar_length = 32
+hpar = 4
+vpar = 3
+metal = 2.69999999997e-8
+T = 2.2e-8
+H = 2e-8
+L = 1.35e-7
+W = 1.08e-7
+D = 4.5e-8
+eps = 1.77079999999e-10
+rho = 1.9e-8
+weight_var = 0
+data_dir = 'data'
+spice_dir = 'test_spice_layer_2'
+
+
+
+# Run
+mapPartition(input_layer,output_layer, xbar_length, layer_num,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,data_dir,spice_dir)
+
 #Horizontal is 3, vertical is 1
