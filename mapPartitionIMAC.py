@@ -384,7 +384,7 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
     negb_r.close()
 
 
-    # TODO: Close all other file descriptors
+    # Close all other file descriptors
     # Close all file descriptors
     for key, file in open_fd.items():
         try:
@@ -392,6 +392,9 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
             print(f"Closed: {key}")
         except Exception as e:
             print(f"Error closing {key}: {e}")
+
+    # TODO: IN THE NEAR FUTURE, I THINK IT WOULD MAKE SENSE TO PUT A JSON FILE TO KEEP TRACK OF HOW THINGS ARE SPLIT, WHO HAS HOW MANY INPUTS, AND EVERYTHING SO IT IS
+    #       EASY IN THE FUTURE TO JOIN EVERYTHING TOGETHER.
 
             
 
