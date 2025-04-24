@@ -21,6 +21,25 @@ def mapIMAC(nodes,length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testnum,da
     for i in range(len(nodes)-1):
         f.write(".include 'layer"+ str(i+1)+".sp'\n")
     for i in range(len(nodes)-1):
+        print(f"\nCalling mapLayer.mapLayer for Layer {i} with the following arguments:\n")
+        print(f"nodes[i] (input neurons): {nodes[i]}")
+        print(f"nodes[i+1] (output neurons): {nodes[i+1]}")
+        print(f"layer number (i+1): {i + 1}")
+        print(f"hpar[i]: {hpar[i]}")
+        print(f"vpar[i]: {vpar[i]}")
+        print(f"metal: {metal}")
+        print(f"T: {T}")
+        print(f"H: {H}")
+        print(f"L: {L}")
+        print(f"W: {W}")
+        print(f"D: {D}")
+        print(f"eps: {eps}")
+        print(f"rho: {rho}")
+        print(f"weight_var: {weight_var}")
+        print(f"data_dir: {data_dir}")
+        print(f"spice_dir: {spice_dir}\n")
+
+        
         mapLayer.mapLayer(nodes[i],nodes[i+1],i+1,hpar[i],vpar[i],metal,T,H,L,W,D,eps,rho,weight_var,data_dir,spice_dir)
         f.write("Xlayer"+ str(i+1)+" vdd vss 0 ")
         for i2 in range(nodes[i]):

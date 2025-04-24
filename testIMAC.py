@@ -14,10 +14,10 @@ import matplotlib.pyplot as plt
 
 start = time.time()
 
-testnum=1000 #Number of input test cases to run
-testnum_per_batch=10 #Number of test cases in a single batch, testnum should be divisible by this number
+testnum=4 #Number of input test cases to run
+testnum_per_batch=2 #Number of test cases in a single batch, testnum should be divisible by this number
 firstimage=0 #start the test inputs from this image
-csv_name = 'inference_metrics_with_labels_0_999.csv'
+csv_name = 'test.csv'
 
 #list of inputs start
 data_dir='data' #The directory where data files are located
@@ -220,6 +220,24 @@ for i in range(batch):
     for j in range(int(testnum_per_batch*nodes[0])):	
         sim_w.write("%f "%(float(data_sim[j])*vdd))	
     sim_w.close()
+
+    print("Calling mapIMAC.mapIMAC with the following arguments:\n")
+    print(f"nodes: {nodes}")
+    print(f"length: {length}")
+    print(f"hpar: {hpar}")
+    print(f"vpar: {vpar}")
+    print(f"metal: {metal}")
+    print(f"T: {T}")
+    print(f"H: {H}")
+    print(f"L: {L}")
+    print(f"W: {W}")
+    print(f"D: {D}")
+    print(f"eps: {eps}")
+    print(f"rho: {rho}")
+    print(f"weight_var: {weight_var}")
+    print(f"testnum_per_batch: {testnum_per_batch}")
+    print(f"data_dir: {data_dir}")
+
     mapIMAC.mapIMAC(nodes,length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testnum_per_batch,data_dir,spice_dir,vdd,vss,tsampling)
     # TODO: Fix to write to classifier.sp new one each time with batch number and everything :)
     os.chdir(spice_dir)
