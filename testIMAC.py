@@ -6,6 +6,7 @@ import time
 import math
 import random
 import mapIMAC
+import mapIMACPartition
 import mapWB
 import numpy as np
 import csv
@@ -21,7 +22,7 @@ csv_name = 'test.csv'
 
 #list of inputs start
 data_dir='data' #The directory where data files are located
-spice_dir='spice' #The directory where spice files are located
+spice_dir='test_spice' #The directory where spice files are located
 dataset_file='test_data.csv' #Name of the dataset file
 label_file='test_labels.csv' #Name of the label file
 weight_var=0.0 #percentage variation in the resistance of the synapses
@@ -238,7 +239,8 @@ for i in range(batch):
     print(f"testnum_per_batch: {testnum_per_batch}")
     print(f"data_dir: {data_dir}")
 
-    mapIMAC.mapIMAC(nodes,length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testnum_per_batch,data_dir,spice_dir,vdd,vss,tsampling)
+    # Assume square partitions
+    mapIMACPartition.mapIMAC(nodes,xbar[0],hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testnum_per_batch,data_dir,spice_dir,vdd,vss,tsampling)
     # TODO: Fix to write to classifier.sp new one each time with batch number and everything :)
     os.chdir(spice_dir)
     os.system('hspice classifier.sp > output.txt')

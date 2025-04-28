@@ -71,8 +71,8 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
                 c+=1
                 r=1
                 if (c == int(layer1_wb*n_hpar/hpar+min((layer1_wb%hpar)/n_hpar,1)+1)):
-                    print("positive increase horizontal partition")
-                    print(f"row: {r}, col: {c}")
+                    #print("positive increase horizontal partition")
+                    #print(f"row: {r}, col: {c}")
                     n_hpar+=1
 
                     # Horizontal Partition Here
@@ -133,11 +133,11 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
             new_range = (new_range_high - new_range_low)
 
             for split_vpar in range(new_range):
-                file_template = f"partitioned_layer_{LayerNUM}_{x_id+1}_{y_id+1}_{split_vpar+1}.sp"
+                file_template = f"layer_{LayerNUM}_{x_id+1}_{y_id+1}_{split_vpar+1}.sp"
                 fd = open(os.path.join(spice_dir,file_template), "w")
 
                 # Write subcircuit definition :)
-                fd.write(f".SUBCKT layer{LayerNUM}_{x_id+1}_{y_id+1}_{split_vpar+1}"+" vdd vss 0 ")
+                fd.write(f".SUBCKT layer_{LayerNUM}_{x_id+1}_{y_id+1}_{split_vpar+1}"+" vdd vss 0 ")
 
                 # Number of input and output in the circuit definition :)
                 for i in range(xbar_length):
@@ -185,8 +185,8 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
                 c+=1
                 r=1
                 if (c == int(layer1_wb*n_hpar/hpar+min((layer1_wb%hpar)/n_hpar,1)+1)):
-                    print("positive increase horizontal partition")
-                    print(f"row: {r}, col: {c}")
+                    #print("positive increase horizontal partition")
+                    #print(f"row: {r}, col: {c}")
                     n_hpar+=1
 
                 # Calculate Indices :) (Row is vertical partitioning, while column is vertical partitioning)
@@ -389,9 +389,11 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
     for key, file in open_fd.items():
         try:
             file.close()
-            print(f"Closed: {key}")
+            #print(f"Closed: {key}")
         except Exception as e:
             print(f"Error closing {key}: {e}")
+
+    return (horizontal_cuts, vertical_cuts, open_fd.keys())
 
     # TODO: IN THE NEAR FUTURE, I THINK IT WOULD MAKE SENSE TO PUT A JSON FILE TO KEEP TRACK OF HOW THINGS ARE SPLIT, WHO HAS HOW MANY INPUTS, AND EVERYTHING SO IT IS
     #       EASY IN THE FUTURE TO JOIN EVERYTHING TOGETHER.
@@ -401,46 +403,46 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
 # -------------
 # Test Function
 # Layer 3
-layer_num = 3
-input_layer = 84
-output_layer = 10
-xbar_length = 32
-hpar = 3
-vpar = 1
-metal = 2.69999999997e-8
-T = 2.2e-8
-H = 2e-8
-L = 1.35e-7
-W = 1.08e-7
-D = 4.5e-8
-eps = 1.77079999999e-10
-rho = 1.9e-8
-weight_var = 0
-data_dir = 'data'
-spice_dir = 'test_spice'
+# layer_num = 3
+# input_layer = 84
+# output_layer = 10
+# xbar_length = 32
+# hpar = 3
+# vpar = 1
+# metal = 2.69999999997e-8
+# T = 2.2e-8
+# H = 2e-8
+# L = 1.35e-7
+# W = 1.08e-7
+# D = 4.5e-8
+# eps = 1.77079999999e-10
+# rho = 1.9e-8
+# weight_var = 0
+# data_dir = 'data'
+# spice_dir = 'test_spice'
 
-# Layer 2
-layer_num = 2
-input_layer = 120
-output_layer = 84
-xbar_length = 32
-hpar = 4
-vpar = 3
-metal = 2.69999999997e-8
-T = 2.2e-8
-H = 2e-8
-L = 1.35e-7
-W = 1.08e-7
-D = 4.5e-8
-eps = 1.77079999999e-10
-rho = 1.9e-8
-weight_var = 0
-data_dir = 'data'
-spice_dir = 'test_spice_layer_2'
+# # Layer 2
+# layer_num = 2
+# input_layer = 120
+# output_layer = 84
+# xbar_length = 32
+# hpar = 4
+# vpar = 3
+# metal = 2.69999999997e-8
+# T = 2.2e-8
+# H = 2e-8
+# L = 1.35e-7
+# W = 1.08e-7
+# D = 4.5e-8
+# eps = 1.77079999999e-10
+# rho = 1.9e-8
+# weight_var = 0
+# data_dir = 'data'
+# spice_dir = 'test_spice_layer_2'
 
 
 
-# Run
-mapPartition(input_layer,output_layer, xbar_length, layer_num,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,data_dir,spice_dir)
+# # Run
+# mapPartition(input_layer,output_layer, xbar_length, layer_num,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,data_dir,spice_dir)
 
 #Horizontal is 3, vertical is 1
