@@ -288,10 +288,10 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
 
             for split_vpar in range(new_range):
                 open_fd[(i+1, vpar_index, split_vpar+1)].write("\n\n**********Zero Positive Biases**********\n")
-                open_fd[(i+1, vpar_index, split_vpar+1)].write("Rbpos%d vd%d sp%d_%d %f\n"% (1,1,xbar_length+1,1, low_resistance))
+                open_fd[(i+1, vpar_index, split_vpar+1)].write("Rbpos%d vd%d sp%d_%d %f\n"% (1,1,xbar_length+1,split_vpar+1, low_resistance))
 
                 open_fd[(i+1, vpar_index, split_vpar+1)].write("\n\n**********Zero Negative Biases**********\n")
-                open_fd[(i+1, vpar_index, split_vpar+1)].write("Rbneg%d vd%d sn%d_%d %f\n"% (1,1,xbar_length+1,1,low_resistance))
+                open_fd[(i+1, vpar_index, split_vpar+1)].write("Rbneg%d vd%d sn%d_%d %f\n"% (1,1,xbar_length+1,split_vpar+1,low_resistance))
 
                 
 
@@ -310,7 +310,7 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
             line = posb_r.readline()
 
             if (float(line) != 0):
-                open_fd[(hpar, vpar_index, split_vpar+1)].write("Rbpos%d vd%d sp%d_%d %f\n"% (1,1,xbar_length+1,1,float(line)))
+                open_fd[(hpar, vpar_index, split_vpar+1)].write("Rbpos%d vd%d sp%d_%d %f\n"% (1,1,xbar_length+1,split_vpar+1,float(line)))
 
 
             # Write negative bias
@@ -319,7 +319,7 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
             line = negb_r.readline()
 
             if (float(line) != 0):
-                open_fd[(hpar, vpar_index, split_vpar+1)].write("Rbneg%d vd%d sn%d_%d %f\n"% (1,1,xbar_length+1,1,float(line)))
+                open_fd[(hpar, vpar_index, split_vpar+1)].write("Rbneg%d vd%d sn%d_%d %f\n"% (1,1,xbar_length+1,split_vpar+1,float(line)))
 
 
     # writing the circuit for vertical line parasitic resistances (only one vertical line for each row BTW)
@@ -356,12 +356,12 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
             for j in range(1):
                 r=j+1 # row number
                 if (i == xbar_length):
-                    file.write("Rsp%d_%d sp%d_%d sp%d_p%d %f\n"% (c,r,c,r,r,n_hpar,hor_parasitic_res))
-                    file.write("Rsn%d_%d sn%d_%d sn%d_p%d %f\n"% (c,r,c,r,r,n_hpar,hor_parasitic_res))
+                    file.write("Rsp%d_%d sp%d_%d sp%d_p%d %f\n"% (c,split_r,c,split_r,r,n_hpar,hor_parasitic_res))
+                    file.write("Rsn%d_%d sn%d_%d sn%d_p%d %f\n"% (c,split_r,c,split_r,r,n_hpar,hor_parasitic_res))
 
                 else:
-                    file.write("Rsp%d_%d sp%d_%d sp%d_%d %f\n"% (c,r,c,r,c+1,r,hor_parasitic_res))
-                    file.write("Rsn%d_%d sn%d_%d sn%d_%d %f\n"% (c,r,c,r,c+1,r,hor_parasitic_res))
+                    file.write("Rsp%d_%d sp%d_%d sp%d_%d %f\n"% (c,split_r,c,split_r,c+1,split_r,hor_parasitic_res))
+                    file.write("Rsn%d_%d sn%d_%d sn%d_%d %f\n"% (c,split_r,c,split_r,c+1,split_r,hor_parasitic_res))
 
     # Write Diff and then output
     for key, file in open_fd.items():

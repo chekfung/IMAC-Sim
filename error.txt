@@ -1,1 +1,1 @@
-Number of wrong recognitions in 1000 input image(s) = 37
+Number of wrong recognitions in 2 input image(s) = 1

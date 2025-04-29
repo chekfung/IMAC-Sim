@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 start = time.time()
 
-testnum=4 #Number of input test cases to run
+testnum=2 #Number of input test cases to run
 testnum_per_batch=2 #Number of test cases in a single batch, testnum should be divisible by this number
 firstimage=0 #start the test inputs from this image
 csv_name = 'test.csv'
@@ -243,6 +243,7 @@ for i in range(batch):
     mapIMACPartition.mapIMAC(nodes,xbar[0],hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testnum_per_batch,data_dir,spice_dir,vdd,vss,tsampling)
     # TODO: Fix to write to classifier.sp new one each time with batch number and everything :)
     os.chdir(spice_dir)
+    print("Running Classifier")
     os.system('hspice classifier.sp > output.txt')
     os.chdir('..')
     out_r=open(spice_dir+'/'+'output.txt', "r")
@@ -258,7 +259,8 @@ for i in range(batch):
 
     ## Load in Everything for Latency calculation
     # Convert .tr0 log to psf to read
-    cmd2 = f'psf -i spice/classifier.tr0 -o spice/classifier.psf'
+    print("Convert to PSF")
+    cmd2 = f'psf -i {spice_dir}/classifier.tr0 -o {spice_dir}/classifier.psf'
     exit_code = os.system(cmd2)
 
     if exit_code != 0:
@@ -267,7 +269,9 @@ for i in range(batch):
         exit()
 
     # Read psf file
-    sim_obj = read_simulation_file('spice/classifier.psf', simulator='hspice')
+    print("Read PSF")
+    sim_obj = read_simulation_file(f'{spice_dir}/classifier.psf', simulator='hspice')
+    print_signal_names(sim_obj, simulator='hspice')
     time_vec = get_signal('time', sim_obj, simulator='hspice')
     plt.figure(0)
 
@@ -289,7 +293,7 @@ for i in range(batch):
         latencies = []
 
         for k in range(10):
-            output_signal = get_signal(f'output{k}', sim_obj, simulator='hspice')
+            output_signal = get_signal(f'layer_3_neuron_output_{k+1}', sim_obj, simulator='hspice')
             subset_output = output_signal[start_index:end_index]
             normalized_output, _, _ = min_max_normalization(subset_output)
             subset_grad_moo = np.abs(np.diff(normalized_output))
@@ -299,7 +303,7 @@ for i in range(batch):
             event_latency = time_vec[end_dynamic] - time_vec[start_index]
             latencies.append(event_latency)
             
-            #print(f"Batch: {i}, Img: {j} / {testnum_per_batch}, Output: {k}, Latency: {event_latency * 10**9} ns")
+            print(f"Batch: {i}, Img: {j} / {testnum_per_batch}, Output: {k}, Latency: {event_latency * 10**9} ns")
 
 
         # Compute Output Voltages and labels
@@ -336,8 +340,8 @@ for i in range(batch):
         print("Energy consumption = %f pJ"%energy_consumed)
         print("sum error= %d"%(sum(err)))
 
-        row = [real_image_id] + [actual_label] + [predicted_label] + [energy_consumed* 10**-12] + out_voltages + latencies
-        writer.writerow(row)
+        #row = [real_image_id] + [actual_label] + [predicted_label] + [energy_consumed* 10**-12] + out_voltages + latencies
+        #writer.writerow(row)
     
     # for j in range(10):
     #     output_signal = get_signal(f'output{j}', sim_obj, simulator='hspice')

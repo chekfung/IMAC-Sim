@@ -14,11 +14,11 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
     for x in range(len(nodes)-1):		
         f.write('.include diff'+str(x+1)+'.sp\n')
     f.write(".include 'neuron.sp'\n")
-    #f.write(".option post \n") # Post causes everything to get spit out :)
+    f.write(".option post \n") # Post causes everything to get spit out :)
     f.write('.option ingold=2 artist=2 psf=2\n')
     f.write('.OPTION DELMAX=1NS\n')
-    f.write('.option probe\n')
-    f.write('.probe v(output0) \n')
+    #f.write('.option probe\n')
+    #f.write('.probe v(output0) \n')
     f.write(".op\n")
     f.write(".PARAM VddVal=%f\n"%vdd)
     f.write(".PARAM VssVal=%f\n"%vss)
@@ -135,7 +135,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
 
     for i in range(testnum):
         for j in range(nodes[len(nodes)-1]):
-            f.write(".MEAS TRAN VOUT%d_%d FIND v(output%d) AT=%d*tsampling\n"%(j,i,j,i+1))
+            f.write(".MEAS TRAN VOUT%d_%d FIND v(layer_3_neuron_output_%d) AT=%d*tsampling\n"%(j,i,j+1,i+1))
     f.write(".end")
     f.close() 
 			
