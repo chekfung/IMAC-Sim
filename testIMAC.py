@@ -251,10 +251,10 @@ for i in range(batch):
         if 'vout' in line:
             vval=findat(line)
             out_list.append(float(vval))
-        if 'energy' in line:
-            pval=findavg(line)
-            print(pval)
-            pwr_list.append(float(pval) * 10**12)
+        # if 'energy' in line:
+        #     pval=findavg(line)
+        #     print(pval)
+        #     pwr_list.append(float(pval) * 10**12)
     out_r.close()
 
     ## Load in Everything for Latency calculation
@@ -271,7 +271,7 @@ for i in range(batch):
     # Read psf file
     print("Read PSF")
     sim_obj = read_simulation_file(f'{spice_dir}/classifier.psf', simulator='hspice')
-    print_signal_names(sim_obj, simulator='hspice')
+    #print_signal_names(sim_obj, simulator='hspice')
     time_vec = get_signal('time', sim_obj, simulator='hspice')
     plt.figure(0)
 
@@ -336,9 +336,9 @@ for i in range(batch):
         else:
             print("Correct prediction")
 
-        energy_consumed = float(pwr_list[j+image_num])
-        print("Energy consumption = %f pJ"%energy_consumed)
-        print("sum error= %d"%(sum(err)))
+        # energy_consumed = float(pwr_list[j+image_num])
+        # print("Energy consumption = %f pJ"%energy_consumed)
+        # print("sum error= %d"%(sum(err)))
 
         #row = [real_image_id] + [actual_label] + [predicted_label] + [energy_consumed* 10**-12] + out_voltages + latencies
         #writer.writerow(row)
@@ -376,7 +376,7 @@ label_r.close()
 
 print("error rate = %f"%(sum(err)/float(testnum)))   #calculate error rate
 print("accuracy = %f%%"%(100-(sum(err)/float(testnum))*100))   #calculate accuracy
-print("average total energy = %f pJ"%(sum(float(x) for x in pwr_list)/float(testnum)))   #calculate average power consumption
+#print("average total energy = %f pJ"%(sum(float(x) for x in pwr_list)/float(testnum)))   #calculate average power consumption
 
 
 
