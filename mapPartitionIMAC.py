@@ -218,7 +218,7 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
         open_fd[(x_id, y_id, split_r)].write("\n\n**********Positive Weighted Array Extras **********\n")
 
         for new_c in range(low_index, high_index+1):
-            open_fd[(x_id, y_id, split_r)].write("Rwpos%d_%d in%d_%d sp%d_%d %f\n"% (new_c,split_r, new_c,split_r,new_c,split_r, low_resistance))
+            open_fd[(x_id, y_id, split_r)].write("Rwpos%d_%d in%d_%d 0 %f\n"% (new_c,split_r, new_c,split_r, low_resistance))
 
 
     # Write Negative Array
@@ -274,7 +274,7 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
         open_fd[(x_id, y_id, split_r)].write("\n\n**********Negative Weighted Array Extras **********\n")
 
         for new_c in range(low_index, high_index+1):
-            open_fd[(x_id, y_id, split_r)].write("Rwneg%d_%d in%d_%d sp%d_%d %f\n"% (new_c,split_r, new_c,split_r,new_c,split_r, low_resistance))
+            open_fd[(x_id, y_id, split_r)].write("Rwneg%d_%d in%d_%d 0 %f\n"% (new_c,split_r, new_c,split_r, low_resistance))
 
 
     # Write 0 bias numbers for partitions where there is nothing happening :)
