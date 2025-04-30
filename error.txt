@@ -1,1 +1,1 @@
-Number of wrong recognitions in 2 input image(s) = 0
+Number of wrong recognitions in 100 input image(s) = 2

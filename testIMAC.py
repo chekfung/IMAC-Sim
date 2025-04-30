@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 
 start = time.time()
 
-testnum=2 #Number of input test cases to run
-testnum_per_batch=2 #Number of test cases in a single batch, testnum should be divisible by this number
+testnum=100 #Number of input test cases to run
+testnum_per_batch=10 #Number of test cases in a single batch, testnum should be divisible by this number
 firstimage=0 #start the test inputs from this image\
 csv_name = 'test.csv'
 csv_folder = 'test_csvs'
@@ -112,33 +112,6 @@ def min_max_normalization(vector):
     normalized = (vector - global_min) / (global_max - global_min)
 
     return normalized, global_min, global_max
-
-#function to extract the measured average voltage or power from time1 to time2 in the output text file genrated by SPICE
-def findavg (line):
-    i=0
-    m=0
-    while (m == 0):
-        i+=1;
-        if (line[i]=='='):
-            s1=i+1;
-        if (line[i]=='f'):
-            s2=i-1;
-            m=1;
-        if (line[i]=='\n'):
-            s2=i;
-            m=1;
-    volt=line[s1:s2]
-    volt=volt.replace(" ","")
-    volt=volt.replace("m","e-3")
-    volt=volt.replace("u","e-6")
-    volt=volt.replace("n","e-9")
-    volt=volt.replace("p","e-12")
-    volt=volt.replace("f","e-15")
-    volt=volt.replace("k","e3")
-    volt=volt.replace("x","e6")
-    volt=volt.replace("g","e9")
-    volt=volt.replace("t","e12")
-    return volt
 
 #function to extract the measured voltage at a specific time in the output text file genrated by SPICE
 def findat (line):
@@ -262,10 +235,6 @@ for i in range(batch):
         if 'vout' in line:
             vval=findat(line)
             out_list.append(float(vval))
-        # if 'energy' in line:
-        #     pval=findavg(line)
-        #     print(pval)
-        #     pwr_list.append(float(pval) * 10**12)
     out_r.close()
 
     ## Load in Everything for Latency calculation
@@ -319,12 +288,12 @@ for i in range(batch):
                 input_name = "layer_{}_neuron_output_{}"
 
             # Go through each cross bar
-            for x_id, y_id, vpar in layer_crossbar_items:
+            for x_id, y_id, split_r in layer_crossbar_items:
                 # Calculate Energy (from unique vdd, vss)
-                vdd_sig = get_signal(f"vdd_{layer_num+1}_{x_id}_{y_id}_{vpar}", sim_obj, simulator='hspice')
-                i_vdd_sig = get_signal(f"i(vdd_{layer_num+1}_{x_id}_{y_id}_{vpar})", sim_obj, simulator='hspice')
-                vss_sig = get_signal(f"vss_{layer_num+1}_{x_id}_{y_id}_{vpar}", sim_obj, simulator='hspice')
-                i_vss_sig = get_signal(f"i(vss_{layer_num+1}_{x_id}_{y_id}_{vpar})", sim_obj, simulator='hspice')
+                vdd_sig = get_signal(f"vdd_{layer_num+1}_{x_id}_{y_id}_{split_r}", sim_obj, simulator='hspice')
+                i_vdd_sig = get_signal(f"i(vdd_{layer_num+1}_{x_id}_{y_id}_{split_r})", sim_obj, simulator='hspice')
+                vss_sig = get_signal(f"vss_{layer_num+1}_{x_id}_{y_id}_{split_r}", sim_obj, simulator='hspice')
+                i_vss_sig = get_signal(f"i(vss_{layer_num+1}_{x_id}_{y_id}_{split_r})", sim_obj, simulator='hspice')
 
                 vdd_pwr = np.abs(vdd_sig[start_index:end_index+1] * i_vdd_sig[start_index:end_index+1])
                 vss_pwr = np.abs(vss_sig[start_index:end_index+1] * i_vss_sig[start_index:end_index+1])
@@ -346,7 +315,7 @@ for i in range(batch):
 
                     # Calculate y
                     low_range_y = vert_cut[y_id-1]
-                    global_y_value = (low_range_y - 1) + vpar
+                    global_y_value = (low_range_y - 1) + split_r
 
                     # Determine start_time for each input
                     for index_guy in range(low_range_x, high_range_x):
@@ -364,7 +333,7 @@ for i in range(batch):
                     start_dynamic = start_index
 
                 # Get Output Signal
-                output_signal = get_signal(f"layer_{layer_num+1}_{x_id}_{y_id}_{vpar}_out", sim_obj, simulator='hspice')
+                output_signal = get_signal(f"layer_{layer_num+1}_{x_id}_{y_id}_{split_r}_out", sim_obj, simulator='hspice')
                 subset_output = output_signal[start_index:end_index]
                 normalized_output, _, _ = min_max_normalization(subset_output)
                 subset_grad_moo = np.abs(np.diff(normalized_output))
@@ -389,7 +358,7 @@ for i in range(batch):
                 current_output = output_signal[end_index]
 
                 # Put everything together
-                row = [f"layer_{layer_num+1}_{x_id}_{y_id}_{vpar}", event_latency, event_energy, current_output, previous_output]
+                row = [f"layer_{layer_num+1}_{x_id}_{y_id}_{split_r}", event_latency, event_energy, current_output, previous_output]
                 image_writer.writerow(row)
 
             # Go through all neurons
