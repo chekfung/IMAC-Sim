@@ -71,8 +71,8 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
             f.write(f"Xlayer_{i+1}_{x_id}_{y_id}_{vpar} {vdd_name} {vss_name} 0 ")
             
             # Keep track of things to probe
-            things_to_probe.append(vdd_name)
-            things_to_probe.append(vss_name)
+            things_to_probe.append(f"v({vdd_name})")
+            things_to_probe.append(f"v({vss_name})")
             things_to_probe.append(f"i({vdd_name})")
             things_to_probe.append(f"i({vss_name})")
 
@@ -111,7 +111,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
             # Write output
             output_name = f"layer_{i+1}_{x_id}_{y_id}_{vpar}_out"
             f.write(output_name + " ")
-            things_to_probe.append(output_name)
+            things_to_probe.append(f"v({output_name})")
             
             f.write(f"layer_{i+1}_{x_id}_{y_id}_{vpar}\n")
 
@@ -127,10 +127,10 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
             f.write(f"{vdd_name_neuron} {vdd_name_neuron} 0 DC VddVal\n")
             f.write(f"Xsig_layer_{i+1}_{j+1} layer_{i+1}_neuron_input_{j+1} layer_{i+1}_neuron_output_{j+1} {vdd_name_neuron} 0 neuron\n")
 
-            things_to_probe.append(vdd_name_neuron)
+            things_to_probe.append(f"v({vdd_name_neuron})")
             things_to_probe.append(f"i({vdd_name_neuron})")
-            things_to_probe.append(f"layer_{i+1}_neuron_input_{j+1}")
-            things_to_probe.append(f"layer_{i+1}_neuron_output_{j+1}")
+            things_to_probe.append(f"v(layer_{i+1}_neuron_input_{j+1})")
+            things_to_probe.append(f"v(layer_{i+1}_neuron_output_{j+1})")
 
 
     f.write("\n\n**********Input Test****************\n\n")
@@ -140,7 +140,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
     for line in range(nodes[0]):
         f.write("v%d layer_0_in%d 0 PWL( 0n 0 "%(line+1,line+1))
         things_to_probe.append(f"i(v{line+1})")
-        things_to_probe.append(f"layer_0_in{line+1}")
+        things_to_probe.append(f"v(layer_0_in{line+1})")
         for image in range(testnum):
             f.write("%fn %f %fn %f "%(image*tsampling+0.1,input_num[line+image*nodes[0]],(image+1)*tsampling,input_num[line+image*nodes[0]]))
         f.write(")\n")

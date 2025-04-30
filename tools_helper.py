@@ -391,7 +391,7 @@ def run_cadence_spectre(args):
     Parameters:
         args (tuple): Contains SPICE file path and simulation index.
 
-    Returns:
+    Returns:p
         str: Simulation success or error message.
     """
     

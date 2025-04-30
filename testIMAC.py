@@ -15,10 +15,11 @@ import matplotlib.pyplot as plt
 
 start = time.time()
 
-testnum=100 #Number of input test cases to run
-testnum_per_batch=10 #Number of test cases in a single batch, testnum should be divisible by this number
-firstimage=0 #start the test inputs from this image
+testnum=2 #Number of input test cases to run
+testnum_per_batch=2 #Number of test cases in a single batch, testnum should be divisible by this number
+firstimage=0 #start the test inputs from this image\
 csv_name = 'test.csv'
+csv_folder = 'test_csvs'
 
 #list of inputs start
 data_dir='data' #The directory where data files are located
@@ -167,6 +168,14 @@ def findat (line):
     volt=volt.replace("t","e12")
     return volt
 
+
+# Check whether output CSV file exists
+if not os.path.exists(csv_folder):
+    os.makedirs(csv_folder)
+    print(f"Created folder: {csv_folder}")
+else:
+    print(f"Folder already exists: {csv_folder}")
+
 #dataset preprocessing
 dataset = np.genfromtxt(data_dir+'/'+dataset_file,delimiter=',')
 dataset_flat = dataset.flatten()
@@ -205,10 +214,11 @@ headers = ['image_num', 'golden_label', 'predicted_label', 'energy'] + \
           [f'output{j}' for j in range(10)] + \
           [f'latency{j}' for j in range(10)] 
 
+per_circuit_header = ['circuit_name', 'latency', 'energy', 'output_value', 'previous_output_value']
+
 file = open(csv_name, mode='w', newline='')
 writer = csv.writer(file)
 writer.writerow(headers)
-
 
 for i in range(batch):
     out_list=[]
@@ -240,7 +250,8 @@ for i in range(batch):
     print(f"data_dir: {data_dir}")
 
     # Assume square partitions
-    mapIMACPartition.mapIMAC(nodes,xbar[0],hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testnum_per_batch,data_dir,spice_dir,vdd,vss,tsampling)
+    layers_keys, layer_cuts = mapIMACPartition.mapIMAC(nodes,xbar[0],hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testnum_per_batch,data_dir,spice_dir,vdd,vss,tsampling)
+
     # TODO: Fix to write to classifier.sp new one each time with batch number and everything :)
     os.chdir(spice_dir)
     print("Running Classifier")
@@ -276,7 +287,9 @@ for i in range(batch):
     plt.figure(0)
 
     for j in range(testnum_per_batch):
-        real_image_id = image_num + j 
+        print(f"Image: {j}")
+        total_energy = 0
+        real_image_id = (image_num + j) + firstimage
 
         start_of_event = j * (tsampling * 10**-9)
         end_of_event = (j+1) * (tsampling *10**-9)
@@ -290,8 +303,155 @@ for i in range(batch):
         end_index_i = valid_timestep_indices[0][-1]+1
         end_index = np.min([end_index_i, len(time_vec)-1])      # Join the end of the index with the start of the new guy :)
 
-        latencies = []
+        # Create CSV :)
+        filename = os.path.join(csv_folder, f"image_{real_image_id}_inference.csv")
+        per_inference_fd = open(filename, mode='w', newline='')
+        image_writer = csv.writer(per_inference_fd)
+        image_writer.writerow(per_circuit_header)
 
+        for layer_num in range(len(nodes)-1):
+            layer_crossbar_items = layers_keys[layer_num+1]
+            hor_cut, vert_cut = layer_cuts[layer_num+1]
+
+            input_name = "layer_{}_in{}"
+
+            if layer_num!=0:
+                input_name = "layer_{}_neuron_output_{}"
+
+            # Go through each cross bar
+            for x_id, y_id, vpar in layer_crossbar_items:
+                # Calculate Energy (from unique vdd, vss)
+                vdd_sig = get_signal(f"vdd_{layer_num+1}_{x_id}_{y_id}_{vpar}", sim_obj, simulator='hspice')
+                i_vdd_sig = get_signal(f"i(vdd_{layer_num+1}_{x_id}_{y_id}_{vpar})", sim_obj, simulator='hspice')
+                vss_sig = get_signal(f"vss_{layer_num+1}_{x_id}_{y_id}_{vpar}", sim_obj, simulator='hspice')
+                i_vss_sig = get_signal(f"i(vss_{layer_num+1}_{x_id}_{y_id}_{vpar})", sim_obj, simulator='hspice')
+
+                vdd_pwr = np.abs(vdd_sig[start_index:end_index+1] * i_vdd_sig[start_index:end_index+1])
+                vss_pwr = np.abs(vss_sig[start_index:end_index+1] * i_vss_sig[start_index:end_index+1])
+                total_pwr = vdd_pwr + vss_pwr
+
+                event_energy = np.trapz(total_pwr, time_vec[start_index:end_index+1])
+                total_energy+=event_energy
+
+                # Calculate Latency (Defined as first input to last output)
+                start_dynamic = len(time_vec)-1
+
+                if layer_num != 0:
+                    # Need to calculate latency based on first input to last output
+                    low_range_x = hor_cut[x_id-1]
+                    high_range_x = hor_cut[x_id]
+
+                    if x_id == len(hor_cut)-1:
+                        high_range_x -= 1
+
+                    # Calculate y
+                    low_range_y = vert_cut[y_id-1]
+                    global_y_value = (low_range_y - 1) + vpar
+
+                    # Determine start_time for each input
+                    for index_guy in range(low_range_x, high_range_x):
+                        input_name = input_name.format(layer_num, index_guy)
+                        input_signal = get_signal(input_name, sim_obj, simulator='hspice')[start_index:end_index]
+                        normalized_input, _, _ = min_max_normalization(input_signal)
+                        subset_grad_moo = np.abs(np.diff(normalized_input))
+                        subset_grad_moo = np.append(subset_grad_moo, 0)
+                        first_zero = np.argmax(subset_grad_moo)  # Plus one due to movement by 1 due to np.dif
+                        cur_start_dynamic = start_index + first_zero
+
+                        if cur_start_dynamic < start_dynamic:
+                            start_dynamic = cur_start_dynamic
+                else:
+                    start_dynamic = start_index
+
+                # Get Output Signal
+                output_signal = get_signal(f"layer_{layer_num+1}_{x_id}_{y_id}_{vpar}_out", sim_obj, simulator='hspice')
+                subset_output = output_signal[start_index:end_index]
+                normalized_output, _, _ = min_max_normalization(subset_output)
+                subset_grad_moo = np.abs(np.diff(normalized_output))
+                subset_grad_moo = np.append(subset_grad_moo, 0)
+                first_zero = np.argmax(subset_grad_moo)  # Plus one due to movement by 1 due to np.dif
+                end_dynamic = start_index + first_zero
+
+                # Band aid fix to get rid of when latency is 0
+                if end_dynamic == start_dynamic:
+                    start_dynamic -=1
+
+                if start_dynamic > end_dynamic:
+                    start_dynamic = end_dynamic-1
+                    
+                event_latency = time_vec[end_dynamic] - time_vec[start_dynamic]
+
+                if j == 0:
+                    previous_output = 0
+                else:
+                    previous_output = output_signal[start_index]
+
+                current_output = output_signal[end_index]
+
+                # Put everything together
+                row = [f"layer_{layer_num+1}_{x_id}_{y_id}_{vpar}", event_latency, event_energy, current_output, previous_output]
+                image_writer.writerow(row)
+
+            # Go through all neurons
+            layer_output_neurons = nodes[layer_num+1]
+
+            for k in range(layer_output_neurons):
+                neuron_name = f"Xsig_layer_{layer_num+1}_{k+1}"
+
+                # Energy Consumed
+                vdd_name_neuron = f"vdd_neuron_{layer_num+1}_{k+1}"
+                vdd_sig = get_signal(vdd_name_neuron, sim_obj, simulator='hspice')
+                i_vdd_sig = get_signal(f"i({vdd_name_neuron})", sim_obj, simulator='hspice')
+
+                vdd_pwr = np.abs(vdd_sig[start_index:end_index+1] * i_vdd_sig[start_index:end_index+1])
+
+                neuron_event_energy = np.trapz(vdd_pwr, time_vec[start_index:end_index+1])
+                total_energy += neuron_event_energy
+
+                # Latency Consumed
+                input_signal_name = f"layer_{layer_num+1}_neuron_input_{k+1}"
+                output_signal_name = f"layer_{layer_num+1}_neuron_output_{k+1}"
+
+                input_signal = get_signal(input_signal_name, sim_obj, simulator='hspice')[start_index:end_index]
+                normalized_input, _, _ = min_max_normalization(input_signal)
+                subset_grad_moo = np.abs(np.diff(normalized_input))
+                subset_grad_moo = np.append(subset_grad_moo, 0)
+                first_zero = np.argmax(subset_grad_moo)  # Plus one due to movement by 1 due to np.dif
+                start_dynamic = start_index + first_zero
+
+                output_signal = get_signal(output_signal_name, sim_obj, simulator='hspice')
+                subset_output = output_signal[start_index:end_index]
+                normalized_output, _, _ = min_max_normalization(subset_output)
+                subset_grad_moo = np.abs(np.diff(normalized_output))
+                subset_grad_moo = np.append(subset_grad_moo, 0)
+                first_zero = np.argmax(subset_grad_moo)  # Plus one due to movement by 1 due to np.dif
+                end_dynamic = start_index + first_zero
+
+                # Band-aid fix for latency when they are equal
+                if end_dynamic == start_dynamic:
+                    start_dynamic -=1
+
+                if start_dynamic > end_dynamic:
+                    start_dynamic = end_dynamic-1
+
+                event_latency = time_vec[end_dynamic] - time_vec[start_dynamic]
+
+                # Output and Previous Output
+                if j == 0:
+                    previous_output = 0
+                else:
+                    previous_output = output_signal[start_index]
+
+                current_output = output_signal[end_index]
+
+                row = [neuron_name, event_latency, event_energy, current_output, previous_output]
+                image_writer.writerow(row)
+        
+        pwr_list.append(total_energy * 10**12)
+        per_inference_fd.close()
+
+        # Calculate End to End Latency :)
+        end_to_end_latencies = []
         for k in range(10):
             output_signal = get_signal(f'layer_3_neuron_output_{k+1}', sim_obj, simulator='hspice')
             subset_output = output_signal[start_index:end_index]
@@ -301,7 +461,7 @@ for i in range(batch):
             first_zero = np.argmax(subset_grad_moo)  # Plus one due to movement by 1 due to np.dif
             end_dynamic = start_index + first_zero
             event_latency = time_vec[end_dynamic] - time_vec[start_index]
-            latencies.append(event_latency)
+            end_to_end_latencies.append(event_latency)
             
             print(f"Batch: {i}, Img: {j} / {testnum_per_batch}, Output: {k}, Latency: {event_latency * 10**9} ns")
 
@@ -336,12 +496,12 @@ for i in range(batch):
         else:
             print("Correct prediction")
 
-        # energy_consumed = float(pwr_list[j+image_num])
-        # print("Energy consumption = %f pJ"%energy_consumed)
-        # print("sum error= %d"%(sum(err)))
+        energy_consumed = float(pwr_list[j+image_num])
+        print("Energy consumption = %f pJ"%energy_consumed)
+        print("sum error= %d"%(sum(err)))
 
-        #row = [real_image_id] + [actual_label] + [predicted_label] + [energy_consumed* 10**-12] + out_voltages + latencies
-        #writer.writerow(row)
+        row = [real_image_id] + [actual_label] + [predicted_label] + [energy_consumed* 10**-12] + out_voltages + end_to_end_latencies
+        writer.writerow(row)
     
     # for j in range(10):
     #     output_signal = get_signal(f'output{j}', sim_obj, simulator='hspice')
@@ -357,7 +517,7 @@ for i in range(batch):
     testimage = testimage + testnum_per_batch
 
 file.close()
-print(f"CSV Created: {csv_name}")
+print(f"End-to-End CSV Created: {csv_name}")
 
 #Area Calculation
 xbar_num = sum(np.multiply(hpar, vpar))
