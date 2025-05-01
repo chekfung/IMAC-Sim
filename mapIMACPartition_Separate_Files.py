@@ -16,7 +16,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
     for i in range(len(nodes)-1):
         # Create File and Header
         f=open(os.path.join(spice_dir,f'full_layer_{i+1}_crossbar.sp'), "w")
-        layers_to_run.append(os.path.join(spice_dir, f'full_layer_{i+1}_crossbar.sp'))
+        layers_to_run.append(f'full_layer_{i+1}_crossbar.sp')
 
         # Write Header
         f.write(f"*Layer {i+1} Crossbar Array\n")
@@ -164,7 +164,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
 
         # Create File and Header
         f=open(os.path.join(spice_dir,f'full_layer_{i+1}_neurons.sp'), "w")
-        neurons_to_run.append(os.path.join(spice_dir,f'full_layer_{i+1}_neurons.sp'))
+        neurons_to_run.append(f'full_layer_{i+1}_neurons.sp')
 
         # Write Header
         f.write(f"*Layer {i+1} Neurons\n")

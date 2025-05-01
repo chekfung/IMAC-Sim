@@ -14,8 +14,8 @@ import matplotlib.pyplot as plt
 
 start = time.time()
 
-testnum=2 #Number of input test cases to run
-testnum_per_batch=2 #Number of test cases in a single batch, testnum should be divisible by this number
+testnum=100 #Number of input test cases to run
+testnum_per_batch=10 #Number of test cases in a single batch, testnum should be divisible by this number
 firstimage=0 #start the test inputs from this image\
 csv_name = 'test.csv'
 csv_folder = 'test_csvs'
@@ -273,13 +273,17 @@ for i in range(batch):
     # Then analyze and then create PWL files to run the next file :)
     for layer_num in range(len(nodes)-1):
         # Crossbar to run
+        print(f'Batch: {i} Run Layer: {layer_num+1}')
         layer_filepath = layers_to_run[layer_num]
+        os.chdir(spice_dir)
         os.system(f'hspice {layer_filepath} > output_crossbar_{layer_num+1}.txt')
+        os.chdir('..')
 
         # Get PSF File
         # Convert .tr0 log to psf to read
         print("Convert to PSF")
-        cmd2 = f'psf -i {os.path.splitext(layer_filepath)[0]}.tr0 -o {os.path.splitext(layer_filepath)[0]}.psf'
+        runs_filepath = os.path.join(spice_dir, os.path.splitext(layer_filepath)[0])
+        cmd2 = f'psf -i {runs_filepath}.tr0 -o {runs_filepath}.psf'
         exit_code = os.system(cmd2)
 
         if exit_code != 0:
@@ -289,13 +293,12 @@ for i in range(batch):
 
         # Read psf file
         print("Read PSF")
-        sim_obj = read_simulation_file(f'{os.path.splitext(layer_filepath)[0]}.psf', simulator='hspice')
+        sim_obj = read_simulation_file(f'{runs_filepath}.psf', simulator='hspice')
         #print_signal_names(sim_obj, simulator='hspice')
         time_vec = get_signal('time', sim_obj, simulator='hspice')
 
         # Calculate Everything
         for j in range(testnum_per_batch):
-            print(f"Image: {j}")
             real_image_id = (image_num + j) + firstimage
 
             start_of_event = j * (tsampling * 10**-9)
@@ -400,8 +403,9 @@ for i in range(batch):
 
         ## Neuron to run
         neuron_filepath = neurons_to_run[layer_num]
-
+        os.chdir(spice_dir)
         os.system(f'hspice {neuron_filepath} > output_neuron_{layer_num+1}.txt')
+        os.chdir('..')
 
         if layer_num == len(nodes)-2:
             # If last one, then look for the vout :)
@@ -416,7 +420,8 @@ for i in range(batch):
         # Get PSF File
         # Convert .tr0 log to psf to read
         print("Convert to PSF")
-        cmd2 = f'psf -i {os.path.splitext(neuron_filepath)[0]}.tr0 -o {os.path.splitext(neuron_filepath)[0]}.psf'
+        runs_filepath = os.path.join(spice_dir, os.path.splitext(neuron_filepath)[0])
+        cmd2 = f'psf -i {runs_filepath}.tr0 -o {runs_filepath}.psf'
         exit_code = os.system(cmd2)
 
         if exit_code != 0:
@@ -426,7 +431,7 @@ for i in range(batch):
 
         # Read psf file
         print("Read PSF")
-        sim_obj = read_simulation_file(f'{os.path.splitext(neuron_filepath)[0]}.psf', simulator='hspice')
+        sim_obj = read_simulation_file(f'{runs_filepath}.psf', simulator='hspice')
         #print_signal_names(sim_obj, simulator='hspice')
         time_vec = get_signal('time', sim_obj, simulator='hspice')
 
@@ -434,7 +439,6 @@ for i in range(batch):
 
         # Calculate Everything
         for j in range(testnum_per_batch):
-            print(f"Image: {j}")
             real_image_id = (image_num + j) + firstimage
 
             start_of_event = j * (tsampling * 10**-9)
@@ -530,52 +534,48 @@ for i in range(batch):
         pwr_list.append(batch_energies[n] * 10**12)
     
     for file_descrip in fd:
-        fd.close()
+        file_descrip.close()
 
+    for j in range(testnum_per_batch):
+        # Compute Output Voltages and labels
+        actual_label = np.argmax(label_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)])
+        print(f'Actual label: {actual_label}')
+        err.append(int(0))
+        list_max=max(out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)])
 
+        out_voltages = [out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)]][0]
+        print(f'Output voltages: {out_voltages}')
 
+        for k in range (nodes[len(nodes)-1]):
+            # Convert to Max
+            if (out_list[nodes[len(nodes)-1]*j+k]==list_max):    # the neuron generating maximum output value represents the corrosponding class
+                out_list[nodes[len(nodes)-1]*j+k]=1.0
+            else:
+                out_list[nodes[len(nodes)-1]*j+k]=0.0
 
+            # Compute Error
+            if (err[j+image_num]==0):
+                if (out_list[nodes[len(nodes)-1]*j+k] != label_list[nodes[len(nodes)-1]*j+k]):
+                    err[j+image_num]=1
+        
+        predicted_label = np.argmax(out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)])
+        print(f'Predicted label: {predicted_label}')
 
-
-
-
-    # Compute Output Voltages and labels
-    actual_label = np.argmax(label_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)])
-    print(f'Actual label: {actual_label}')
-    err.append(int(0))
-    list_max=max(out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)])
-
-    out_voltages = [out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)]][0]
-    print(f'Output voltages: {out_voltages}')
-
-    for k in range (nodes[len(nodes)-1]):
-        # Convert to Max
-        if (out_list[nodes[len(nodes)-1]*j+k]==list_max):    # the neuron generating maximum output value represents the corrosponding class
-            out_list[nodes[len(nodes)-1]*j+k]=1.0
+        # Print correct or not
+        if err[j+image_num]==1:
+            print("Wrong prediction!")
         else:
-            out_list[nodes[len(nodes)-1]*j+k]=0.0
+            print("Correct prediction")
 
-        # Compute Error
-        if (err[j+image_num]==0):
-            if (out_list[nodes[len(nodes)-1]*j+k] != label_list[nodes[len(nodes)-1]*j+k]):
-                err[j+image_num]=1
-    
-    predicted_label = np.argmax(out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)])
-    print(f'Predicted label: {predicted_label}')
+        energy_consumed = float(pwr_list[j+image_num])
+        print("Energy consumption = %f pJ"%energy_consumed)
+        print("sum error= %d"%(sum(err)))
 
-    # Print correct or not
-    if err[j+image_num]==1:
-        print("Wrong prediction!")
-    else:
-        print("Correct prediction")
+        real_image_id = (image_num + j) + firstimage
 
-    energy_consumed = float(pwr_list[j+image_num])
-    print("Energy consumption = %f pJ"%energy_consumed)
-    print("sum error= %d"%(sum(err)))
-
-    row = [real_image_id] + [actual_label] + [predicted_label] + [energy_consumed* 10**-12] + out_voltages
-    writer.writerow(row)
-    
+        row = [real_image_id] + [actual_label] + [predicted_label] + [energy_consumed* 10**-12] + out_voltages
+        writer.writerow(row)
+        
     # for j in range(10):
     #     output_signal = get_signal(f'output{j}', sim_obj, simulator='hspice')
     #     plt.plot(time_vec * 10**9, output_signal, label=f'output{j}')
