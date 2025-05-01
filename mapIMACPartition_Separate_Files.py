@@ -10,10 +10,13 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
     # For each layer / activation layer, create separate file
     layers = {}
     layer_cuts = {}
+    layers_to_run = []
+    neurons_to_run = []
 
     for i in range(len(nodes)-1):
         # Create File and Header
         f=open(os.path.join(spice_dir,f'full_layer_{i+1}_crossbar.sp'), "w")
+        layers_to_run.append(os.path.join(spice_dir, f'full_layer_{i+1}_crossbar.sp'))
 
         # Write Header
         f.write(f"*Layer {i+1} Crossbar Array\n")
@@ -52,13 +55,13 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
         print(f"writing layer {i+1}")
         f.write(f"\n\n********** Layer {i+1} **********\n")
 
-        for (x_id, y_id, vpar) in layer_keys:
+        for (x_id, y_id, split_r) in layer_keys:
             # Use separate vdd, vss :)
-            vdd_name = f"vdd_{i+1}_{x_id}_{y_id}_{vpar}"
-            vss_name = f"vss_{i+1}_{x_id}_{y_id}_{vpar}"
+            vdd_name = f"vdd_{i+1}_{x_id}_{y_id}_{split_r}"
+            vss_name = f"vss_{i+1}_{x_id}_{y_id}_{split_r}"
             f.write(f"{vss_name} {vss_name} 0 DC VssVal\n")
             f.write(f"{vdd_name} {vdd_name} 0 DC VddVal\n")
-            f.write(f"Xlayer_{i+1}_{x_id}_{y_id}_{vpar} {vdd_name} {vss_name} 0 ")
+            f.write(f"Xlayer_{i+1}_{x_id}_{y_id}_{split_r} {vdd_name} {vss_name} 0 ")
             
             # Keep track of things to probe
             things_to_probe.append(f"v({vdd_name})")
@@ -75,7 +78,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
 
             # Calculate y
             low_range_y = vert_cut[y_id-1]
-            global_y_value = (low_range_y - 1) + vpar
+            global_y_value = (low_range_y - 1) + split_r
             
             #print(f"X: {low_range_x} - {high_range_x-1}")
             #print(f"Y: {global_y_value}")
@@ -99,16 +102,16 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
                 f.write("0 ")
 
             # Write output
-            output_name = f"layer_{i+1}_{x_id}_{y_id}_{vpar}_out"
+            output_name = f"layer_{i+1}_{x_id}_{y_id}_{split_r}_out"
             f.write(output_name + " ")
             things_to_probe.append(f"v({output_name})")
             
-            f.write(f"layer_{i+1}_{x_id}_{y_id}_{vpar}\n")
+            f.write(f"layer_{i+1}_{x_id}_{y_id}_{split_r}\n")
 
         # Connect to Output Capacitor :)
         f.write(f"\n\n********** Output Capacitors in Layer {i+1} **********\n")
-        for (x_id, y_id, vpar) in layer_keys:
-            f.write(f"C_{x_id}_{y_id}_{vpar} layer_{i+1}_{x_id}_{y_id}_{vpar}_out 0 500f")
+        for (x_id, y_id, split_r) in layer_keys:
+            f.write(f"C_{x_id}_{y_id}_{split_r} layer_{i+1}_{x_id}_{y_id}_{split_r}_out 0 500f\n")
         
         # Write Input
         if i == 0:
@@ -160,7 +163,8 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
         layer_output_neurons = nodes[i+1]
 
         # Create File and Header
-        f=open(os.path.join(spice_dir,f'full_layer_{i+1}neurons.sp'), "w")
+        f=open(os.path.join(spice_dir,f'full_layer_{i+1}_neurons.sp'), "w")
+        neurons_to_run.append(os.path.join(spice_dir,f'full_layer_{i+1}_neurons.sp'))
 
         # Write Header
         f.write(f"*Layer {i+1} Neurons\n")
@@ -191,7 +195,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
         # Create Capacitance Layer
         f.write(f"\n\n********** Output Capacitors in Layer {i+1} **********\n")
         for j in range(layer_output_neurons):
-            f.write(f"C_neuron{i+1}_{j+1} layer_{i+1}_neuron_output_{j+1}) 0 500f")
+            f.write(f"C_neuron{i+1}_{j+1} layer_{i+1}_neuron_output_{j+1} 0 500f\n")
 
 
         # From previous layers, construct how to connect things such that we have correct input and output
@@ -200,13 +204,13 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
 
         f.write("\n\n**********Input Test****************\n\n")
         n = 0
-        for (x_id, y_id, vpar) in layer_keys:
+        for (x_id, y_id, split_r) in layer_keys:
             # Calculate y
             low_range_y = vert_cut[y_id-1]
-            global_y_value = (low_range_y - 1) + vpar
+            global_y_value = (low_range_y - 1) + split_r
 
             # Write output
-            output_name = f"layer_{i+1}_{x_id}_{y_id}_{vpar}_out"
+            output_name = f"layer_{i+1}_{x_id}_{y_id}_{split_r}_out"
             things_to_probe.append(f"v({output_name})")
             
             # Write Input Guys :)
@@ -218,7 +222,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
 
             # Write resistor to connect to neuron (super small resistance :) )
             real_out_name = f"layer_{i+1}_neuron_input_{global_y_value}"
-            f.write(f"R_{i+1}_{x_id}_{y_id}_{vpar} {output_name} {real_out_name} 1u\n")
+            f.write(f"R_{i+1}_{x_id}_{y_id}_{split_r} {output_name} {real_out_name} 1u\n")
             n+=1
         
          # Write transient analysis
@@ -228,11 +232,17 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
         for guy in things_to_probe:
             f.write(f".probe {guy}\n")
 
+        # Write Analysis
+        if i == len(nodes)-2:
+            for test in range(testnum):
+                for j in range(nodes[len(nodes)-1]):
+                    f.write(".MEAS TRAN VOUT%d_%d FIND v(layer_3_neuron_output_%d) AT=%d*tsampling\n"%(j,test,j+1,test+1))
+
         # Write .end :)
         f.write(".end")
 
         f.close() 
 
-    return (layers, layer_cuts)
+    return (layers_to_run, neurons_to_run, layers, layer_cuts)
 			
 			
