@@ -124,7 +124,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
                 things_to_probe.append(f"i(v{line+1})")
                 things_to_probe.append(f"v(layer_0_in{line+1})")
                 for image in range(testnum):
-                    f.write("%fn %f %fn %f "%(image*tsampling+0.1,input_num[line+image*nodes[0]],(image+1)*tsampling,input_num[line+image*nodes[0]]))
+                    f.write("%fn %f %fn %f "%(image*tsampling+(0.1*tsampling),input_num[line+image*nodes[0]],(image+1)*tsampling,input_num[line+image*nodes[0]]))
                 f.write(")\n")
             c.close()
         else:
@@ -133,11 +133,11 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
             f.write("\n\n**********Input Test****************\n\n")
             
             for n in range(nodes[i]):
-                name = input_name.format(i, n)
-                filepath = "TODO_filepath" #TODO:
-                write_input_spike_file(f, f"v{n}", "first_net_not_used", name, filepath, 0, simulator='hspice', write_voltage_src=False, current_src=False)
+                name = input_name.format(i, n+1)
+                filepath = os.path.join("../pwl_files", f"neuron_{i}_{n}_out.txt")
+                write_input_spike_file(f, f"v{n+1}", "first_net_not_used", name, filepath, 0, simulator='hspice', write_voltage_src=False, current_src=False)
 
-                things_to_probe.append(f"i(v{n})")
+                things_to_probe.append(f"i(v{n+1})")
                 things_to_probe.append(f"v({name})")
 
         # Write transient analysis
@@ -214,10 +214,10 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
             things_to_probe.append(f"v({output_name})")
             
             # Write Input Guys :)
-            filepath = 'TODO_filepath'
-            write_input_spike_file(f, f"v{n}", "first_net_not_used", output_name, filepath, 0, simulator='hspice', write_voltage_src=False, current_src=False)
+            filepath = os.path.join('../pwl_files', f"layer_{i+1}_{x_id}_{y_id}_{split_r}_out.txt")
+            write_input_spike_file(f, f"v{n+1}", "first_net_not_used", output_name, filepath, 0, simulator='hspice', write_voltage_src=False, current_src=False)
 
-            things_to_probe.append(f"i(v{n})")
+            things_to_probe.append(f"i(v{n+1})")
             things_to_probe.append(f"v({output_name})")
 
             # Write resistor to connect to neuron (super small resistance :) )

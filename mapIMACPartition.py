@@ -142,7 +142,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
         things_to_probe.append(f"i(v{line+1})")
         things_to_probe.append(f"v(layer_0_in{line+1})")
         for image in range(testnum):
-            f.write("%fn %f %fn %f "%(image*tsampling+0.1,input_num[line+image*nodes[0]],(image+1)*tsampling,input_num[line+image*nodes[0]]))
+            f.write("%fn %f %fn %f "%(image*tsampling+(tsampling*0.1),input_num[line+image*nodes[0]],(image+1)*tsampling,input_num[line+image*nodes[0]]))
         f.write(")\n")
     c.close()
 

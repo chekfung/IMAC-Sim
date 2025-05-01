@@ -57,6 +57,24 @@ print('Rhigh=%f'%rhigh)
 print('Horizontal partitions = '+str(hpar))
 print('Vertical partitions = '+str(vpar))
 
+
+def create_pwl_from_input_pulses(filename, time_of_each_input, transition_time, input_vector):
+    # Initialize the time counter
+    current_time = 0.0
+
+    with open(filename, 'w') as f:
+        f.write(f"{current_time}, {0}\n")
+
+        for i, target_voltage in enumerate(input_vector):
+
+            # Transition from the previous voltage to the current target voltage
+            current_time += transition_time
+            f.write(f"{current_time}, {target_voltage}\n")
+
+            # Hold the target voltage for the remainder of the input period
+            current_time += (time_of_each_input - transition_time)
+            f.write(f"{current_time}, {target_voltage}\n")
+
 #function to update the device resistances in the neuron.sp file, which includes the spice file for activation function
 def update_neuron (rlow,rhigh):
     ff=open(spice_dir+'/'+'neuron.sp', "r+")
@@ -191,8 +209,7 @@ pwr_list=[] #the array containing power information for each test case
 
 # Create CSV to store eveything :)
 headers = ['image_num', 'golden_label', 'predicted_label', 'energy'] + \
-          [f'output{j}' for j in range(10)] + \
-          [f'latency{j}' for j in range(10)] 
+          [f'output{j}' for j in range(10)]
 
 per_circuit_header = ['circuit_name', 'latency', 'energy', 'output_value', 'previous_output_value']
 
@@ -235,17 +252,34 @@ for i in range(batch):
     print("Running Classifier")
 
     # Run Files, in order :)
-    layer_runs = i 
+    # Open file descriptors for everything in a batch
+    batch_energies = np.zeros(testnum_per_batch)
+    fd = []
+    csv_writers = []
 
-    for i in range(len(nodes)-1):
+    for j in range(testnum_per_batch):
+        real_image_id = (image_num + j) + firstimage
+
+        # Create CSV :)
+        filename = os.path.join(csv_folder, f"image_{real_image_id}_inference.csv")
+        per_inference_fd = open(filename, mode='w', newline='')
+        image_writer = csv.writer(per_inference_fd)
+        image_writer.writerow(per_circuit_header)
+
+        fd.append(per_inference_fd)
+        csv_writers.append(image_writer)
+
+    # Run through and run each of the nodes
+    # Then analyze and then create PWL files to run the next file :)
+    for layer_num in range(len(nodes)-1):
         # Crossbar to run
-        layer_filepath = layers_to_run[i]
-        os.system(f'hspice {layer_filepath} > output_crossbar_{i+1}.txt')
+        layer_filepath = layers_to_run[layer_num]
+        os.system(f'hspice {layer_filepath} > output_crossbar_{layer_num+1}.txt')
 
         # Get PSF File
         # Convert .tr0 log to psf to read
         print("Convert to PSF")
-        cmd2 = f'psf -i {spice_dir}/classifier.tr0 -o {spice_dir}/classifier.psf'
+        cmd2 = f'psf -i {os.path.splitext(layer_filepath)[0]}.tr0 -o {os.path.splitext(layer_filepath)[0]}.psf'
         exit_code = os.system(cmd2)
 
         if exit_code != 0:
@@ -255,145 +289,27 @@ for i in range(batch):
 
         # Read psf file
         print("Read PSF")
-        sim_obj = read_simulation_file(f'{spice_dir}/classifier.psf', simulator='hspice')
+        sim_obj = read_simulation_file(f'{os.path.splitext(layer_filepath)[0]}.psf', simulator='hspice')
         #print_signal_names(sim_obj, simulator='hspice')
         time_vec = get_signal('time', sim_obj, simulator='hspice')
 
         # Calculate Everything
+        for j in range(testnum_per_batch):
+            print(f"Image: {j}")
+            real_image_id = (image_num + j) + firstimage
 
+            start_of_event = j * (tsampling * 10**-9)
+            end_of_event = (j+1) * (tsampling *10**-9)
 
+            # Convert to the indices that work with our SPICE simulation.
+            bounds_mask = (time_vec >= start_of_event) & (time_vec <= end_of_event)
+            valid_timestep_indices = np.where(bounds_mask)
 
+            # Fix the end index to be plus one (so that we slightly overlap things.)
+            start_index = valid_timestep_indices[0][0]  
+            end_index_i = valid_timestep_indices[0][-1]+1
+            end_index = np.min([end_index_i, len(time_vec)-1])      # Join the end of the index with the start of the new guy :)
 
-
-        
-
-
-
-
-
-
-
-        # Create new PSF files to run from outputs :)
-
-
-
-
-
-
-
-
-
-        
-
-
-
-        ## Neuron to run
-        neuron_filepath = neurons_to_run[i]
-
-
-
-        # TODO:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # TODO: Fix to write to classifier.sp new one each time with batch number and everything :)
-    os.chdir(spice_dir)
-    print("Running Classifier")
-    os.system('hspice classifier.sp > output.txt')
-    os.chdir('..')
-
-    out_r=open(spice_dir+'/'+'output.txt', "r")
-    for line in out_r:
-        if 'vout' in line:
-            vval=findat(line)
-            out_list.append(float(vval))
-    out_r.close()
-
-    ## Load in Everything for Latency calculation
-    # Convert .tr0 log to psf to read
-    print("Convert to PSF")
-    cmd2 = f'psf -i {spice_dir}/classifier.tr0 -o {spice_dir}/classifier.psf'
-    exit_code = os.system(cmd2)
-
-    if exit_code != 0:
-        error_message = f"Error converting to PSF simulation #{int}, exit code: {exit_code}"
-        print(error_message)
-        exit()
-
-    # Read psf file
-    print("Read PSF")
-    sim_obj = read_simulation_file(f'{spice_dir}/classifier.psf', simulator='hspice')
-    #print_signal_names(sim_obj, simulator='hspice')
-    time_vec = get_signal('time', sim_obj, simulator='hspice')
-
-    for j in range(testnum_per_batch):
-        print(f"Image: {j}")
-        total_energy = 0
-        real_image_id = (image_num + j) + firstimage
-
-        start_of_event = j * (tsampling * 10**-9)
-        end_of_event = (j+1) * (tsampling *10**-9)
-
-        # Convert to the indices that work with our SPICE simulation.
-        bounds_mask = (time_vec >= start_of_event) & (time_vec <= end_of_event)
-        valid_timestep_indices = np.where(bounds_mask)
-
-        # Fix the end index to be plus one (so that we slightly overlap things.)
-        start_index = valid_timestep_indices[0][0]  
-        end_index_i = valid_timestep_indices[0][-1]+1
-        end_index = np.min([end_index_i, len(time_vec)-1])      # Join the end of the index with the start of the new guy :)
-
-        # Create CSV :)
-        filename = os.path.join(csv_folder, f"image_{real_image_id}_inference.csv")
-        per_inference_fd = open(filename, mode='w', newline='')
-        image_writer = csv.writer(per_inference_fd)
-        image_writer.writerow(per_circuit_header)
-
-        for layer_num in range(len(nodes)-1):
             layer_crossbar_items = layers_keys[layer_num+1]
             hor_cut, vert_cut = layer_cuts[layer_num+1]
 
@@ -415,37 +331,10 @@ for i in range(batch):
                 total_pwr = vdd_pwr + vss_pwr
 
                 event_energy = np.trapz(total_pwr, time_vec[start_index:end_index+1])
-                total_energy+=event_energy
+                batch_energies[j]+=event_energy
 
                 # Calculate Latency (Defined as first input to last output)
-                start_dynamic = len(time_vec)-1
-
-                if layer_num != 0:
-                    # Need to calculate latency based on first input to last output
-                    low_range_x = hor_cut[x_id-1]
-                    high_range_x = hor_cut[x_id]
-
-                    if x_id == len(hor_cut)-1:
-                        high_range_x -= 1
-
-                    # Calculate y
-                    low_range_y = vert_cut[y_id-1]
-                    global_y_value = (low_range_y - 1) + split_r
-
-                    # Determine start_time for each input
-                    for index_guy in range(low_range_x, high_range_x):
-                        input_name = input_name.format(layer_num, index_guy)
-                        input_signal = get_signal(input_name, sim_obj, simulator='hspice')[start_index:end_index]
-                        normalized_input, _, _ = min_max_normalization(input_signal)
-                        subset_grad_moo = np.abs(np.diff(normalized_input))
-                        subset_grad_moo = np.append(subset_grad_moo, 0)
-                        first_zero = np.argmax(subset_grad_moo)  # Plus one due to movement by 1 due to np.dif
-                        cur_start_dynamic = start_index + first_zero
-
-                        if cur_start_dynamic < start_dynamic:
-                            start_dynamic = cur_start_dynamic
-                else:
-                    start_dynamic = start_index
+                start_dynamic = start_index
 
                 # Get Output Signal
                 output_signal = get_signal(f"layer_{layer_num+1}_{x_id}_{y_id}_{split_r}_out", sim_obj, simulator='hspice')
@@ -474,10 +363,91 @@ for i in range(batch):
 
                 # Put everything together
                 row = [f"layer_{layer_num+1}_{x_id}_{y_id}_{split_r}", event_latency, event_energy, current_output, previous_output]
-                image_writer.writerow(row)
+                csv_writers[j].writerow(row)
 
-            # Go through all neurons
-            layer_output_neurons = nodes[layer_num+1]
+        # Create PWL Files :)
+        layer_crossbar_items = layers_keys[layer_num+1]
+
+        # Go through each cross bar
+        for x_id, y_id, split_r in layer_crossbar_items:
+            # Get Output Signal
+            output_signal = get_signal(f"layer_{layer_num+1}_{x_id}_{y_id}_{split_r}_out", sim_obj, simulator='hspice')
+            output_voltages = np.zeros(testnum_per_batch)
+
+            # Get for each inference
+            for m in range(testnum_per_batch):
+                real_image_id = (image_num + m) + firstimage
+
+                start_of_event = m * (tsampling * 10**-9)
+                end_of_event = (m+1) * (tsampling *10**-9)
+
+                # Convert to the indices that work with our SPICE simulation.
+                bounds_mask = (time_vec >= start_of_event) & (time_vec <= end_of_event)
+                valid_timestep_indices = np.where(bounds_mask)
+
+                # Fix the end index to be plus one (so that we slightly overlap things.)
+                start_index = valid_timestep_indices[0][0]  
+                end_index_i = valid_timestep_indices[0][-1]+1
+                end_index = np.min([end_index_i, len(time_vec)-1])      # Join the end of the index with the start of the new guy :)
+
+                # Get Truncated Output
+                truncated_output_signal = output_signal[start_index:end_index]
+
+                output_voltages[m] = truncated_output_signal[-2]
+
+            # Create PWL File for each
+            create_pwl_from_input_pulses(os.path.join(pwl_folder, f"layer_{layer_num+1}_{x_id}_{y_id}_{split_r}_out.txt"), tsampling*10**-9, (0.1*tsampling*10**-9), output_voltages)
+
+        ## Neuron to run
+        neuron_filepath = neurons_to_run[layer_num]
+
+        os.system(f'hspice {neuron_filepath} > output_neuron_{layer_num+1}.txt')
+
+        if layer_num == len(nodes)-2:
+            # If last one, then look for the vout :)
+            out_r=open(spice_dir+'/'+f'output_neuron_{layer_num+1}.txt', "r")
+
+            for line in out_r:
+                if 'vout' in line:
+                    vval=findat(line)
+                    out_list.append(float(vval))
+            out_r.close()
+
+        # Get PSF File
+        # Convert .tr0 log to psf to read
+        print("Convert to PSF")
+        cmd2 = f'psf -i {os.path.splitext(neuron_filepath)[0]}.tr0 -o {os.path.splitext(neuron_filepath)[0]}.psf'
+        exit_code = os.system(cmd2)
+
+        if exit_code != 0:
+            error_message = f"Error converting to PSF simulation #{int}, exit code: {exit_code}"
+            print(error_message)
+            exit()
+
+        # Read psf file
+        print("Read PSF")
+        sim_obj = read_simulation_file(f'{os.path.splitext(neuron_filepath)[0]}.psf', simulator='hspice')
+        #print_signal_names(sim_obj, simulator='hspice')
+        time_vec = get_signal('time', sim_obj, simulator='hspice')
+
+        layer_output_neurons = nodes[layer_num+1]
+
+        # Calculate Everything
+        for j in range(testnum_per_batch):
+            print(f"Image: {j}")
+            real_image_id = (image_num + j) + firstimage
+
+            start_of_event = j * (tsampling * 10**-9)
+            end_of_event = (j+1) * (tsampling *10**-9)
+
+            # Convert to the indices that work with our SPICE simulation.
+            bounds_mask = (time_vec >= start_of_event) & (time_vec <= end_of_event)
+            valid_timestep_indices = np.where(bounds_mask)
+
+            # Fix the end index to be plus one (so that we slightly overlap things.)
+            start_index = valid_timestep_indices[0][0]  
+            end_index_i = valid_timestep_indices[0][-1]+1
+            end_index = np.min([end_index_i, len(time_vec)-1])      # Join the end of the index with the start of the new guy :)
 
             for k in range(layer_output_neurons):
                 neuron_name = f"Xsig_layer_{layer_num+1}_{k+1}"
@@ -490,18 +460,11 @@ for i in range(batch):
                 vdd_pwr = np.abs(vdd_sig[start_index:end_index+1] * i_vdd_sig[start_index:end_index+1])
 
                 neuron_event_energy = np.trapz(vdd_pwr, time_vec[start_index:end_index+1])
-                total_energy += neuron_event_energy
+                batch_energies[j] += neuron_event_energy
 
                 # Latency Consumed
-                input_signal_name = f"layer_{layer_num+1}_neuron_input_{k+1}"
                 output_signal_name = f"layer_{layer_num+1}_neuron_output_{k+1}"
-
-                input_signal = get_signal(input_signal_name, sim_obj, simulator='hspice')[start_index:end_index]
-                normalized_input, _, _ = min_max_normalization(input_signal)
-                subset_grad_moo = np.abs(np.diff(normalized_input))
-                subset_grad_moo = np.append(subset_grad_moo, 0)
-                first_zero = np.argmax(subset_grad_moo)  # Plus one due to movement by 1 due to np.dif
-                start_dynamic = start_index + first_zero
+                start_dynamic = start_index
 
                 output_signal = get_signal(output_signal_name, sim_obj, simulator='hspice')
                 subset_output = output_signal[start_index:end_index]
@@ -529,63 +492,89 @@ for i in range(batch):
                 current_output = output_signal[end_index]
 
                 row = [neuron_name, event_latency, event_energy, current_output, previous_output]
-                image_writer.writerow(row)
-        
-        pwr_list.append(total_energy * 10**12)
-        per_inference_fd.close()
+                csv_writers[j].writerow(row)
 
-        # Calculate End to End Latency :)
-        end_to_end_latencies = []
-        for k in range(10):
-            output_signal = get_signal(f'layer_3_neuron_output_{k+1}', sim_obj, simulator='hspice')
-            subset_output = output_signal[start_index:end_index]
-            normalized_output, _, _ = min_max_normalization(subset_output)
-            subset_grad_moo = np.abs(np.diff(normalized_output))
-            subset_grad_moo = np.append(subset_grad_moo, 0)
-            first_zero = np.argmax(subset_grad_moo)  # Plus one due to movement by 1 due to np.dif
-            end_dynamic = start_index + first_zero
-            event_latency = time_vec[end_dynamic] - time_vec[start_index]
-            end_to_end_latencies.append(event_latency)
-            
-            print(f"Batch: {i}, Img: {j} / {testnum_per_batch}, Output: {k}, Latency: {event_latency * 10**9} ns")
+        # Write PWL Files
+        for k in range(layer_output_neurons):
+            # output vector definition
+            output_voltages = np.zeros(testnum_per_batch)
+
+            # Get signal
+            output_signal_name = f"layer_{layer_num+1}_neuron_output_{k+1}"
+            output_signal = get_signal(output_signal_name, sim_obj, simulator='hspice')
+
+            for m in range(testnum_per_batch):
+                real_image_id = (image_num + m) + firstimage
+
+                start_of_event = m * (tsampling * 10**-9)
+                end_of_event = (m+1) * (tsampling *10**-9)
+
+                # Convert to the indices that work with our SPICE simulation.
+                bounds_mask = (time_vec >= start_of_event) & (time_vec <= end_of_event)
+                valid_timestep_indices = np.where(bounds_mask)
+
+                # Fix the end index to be plus one (so that we slightly overlap things.)
+                start_index = valid_timestep_indices[0][0]  
+                end_index_i = valid_timestep_indices[0][-1]+1
+                end_index = np.min([end_index_i, len(time_vec)-1])      # Join the end of the index with the start of the new guy :)
+
+                # Get Truncated Output
+                truncated_output_signal = output_signal[start_index:end_index]
+
+                output_voltages[m] = truncated_output_signal[-2]
+
+            create_pwl_from_input_pulses(os.path.join(pwl_folder, f"neuron_{layer_num+1}_{k}_out.txt"), tsampling*10**-9, (0.1*tsampling*10**-9), output_voltages)
 
 
-        # Compute Output Voltages and labels
-        actual_label = np.argmax(label_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)])
-        print(f'Actual label: {actual_label}')
-        err.append(int(0))
-        list_max=max(out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)])
+    for n in range(testnum_per_batch):
+        pwr_list.append(batch_energies[n] * 10**12)
+    
+    for file_descrip in fd:
+        fd.close()
 
-        out_voltages = [out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)]][0]
-        print(f'Output voltages: {out_voltages}')
 
-        for k in range (nodes[len(nodes)-1]):
-            # Convert to Max
-            if (out_list[nodes[len(nodes)-1]*j+k]==list_max):    # the neuron generating maximum output value represents the corrosponding class
-                out_list[nodes[len(nodes)-1]*j+k]=1.0
-            else:
-                out_list[nodes[len(nodes)-1]*j+k]=0.0
 
-            # Compute Error
-            if (err[j+image_num]==0):
-                if (out_list[nodes[len(nodes)-1]*j+k] != label_list[nodes[len(nodes)-1]*j+k]):
-                    err[j+image_num]=1
-        
-        predicted_label = np.argmax(out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)])
-        print(f'Predicted label: {predicted_label}')
 
-        # Print correct or not
-        if err[j+image_num]==1:
-            print("Wrong prediction!")
+
+
+
+
+    # Compute Output Voltages and labels
+    actual_label = np.argmax(label_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)])
+    print(f'Actual label: {actual_label}')
+    err.append(int(0))
+    list_max=max(out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)])
+
+    out_voltages = [out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)]][0]
+    print(f'Output voltages: {out_voltages}')
+
+    for k in range (nodes[len(nodes)-1]):
+        # Convert to Max
+        if (out_list[nodes[len(nodes)-1]*j+k]==list_max):    # the neuron generating maximum output value represents the corrosponding class
+            out_list[nodes[len(nodes)-1]*j+k]=1.0
         else:
-            print("Correct prediction")
+            out_list[nodes[len(nodes)-1]*j+k]=0.0
 
-        energy_consumed = float(pwr_list[j+image_num])
-        print("Energy consumption = %f pJ"%energy_consumed)
-        print("sum error= %d"%(sum(err)))
+        # Compute Error
+        if (err[j+image_num]==0):
+            if (out_list[nodes[len(nodes)-1]*j+k] != label_list[nodes[len(nodes)-1]*j+k]):
+                err[j+image_num]=1
+    
+    predicted_label = np.argmax(out_list[nodes[len(nodes)-1]*j:nodes[len(nodes)-1]*(j+1)])
+    print(f'Predicted label: {predicted_label}')
 
-        row = [real_image_id] + [actual_label] + [predicted_label] + [energy_consumed* 10**-12] + out_voltages + end_to_end_latencies
-        writer.writerow(row)
+    # Print correct or not
+    if err[j+image_num]==1:
+        print("Wrong prediction!")
+    else:
+        print("Correct prediction")
+
+    energy_consumed = float(pwr_list[j+image_num])
+    print("Energy consumption = %f pJ"%energy_consumed)
+    print("sum error= %d"%(sum(err)))
+
+    row = [real_image_id] + [actual_label] + [predicted_label] + [energy_consumed* 10**-12] + out_voltages
+    writer.writerow(row)
     
     # for j in range(10):
     #     output_signal = get_signal(f'output{j}', sim_obj, simulator='hspice')
