@@ -14,11 +14,11 @@ import matplotlib.pyplot as plt
 
 start = time.time()
 
-testnum=100 #Number of input test cases to run
+testnum=10000 #Number of input test cases to run
 testnum_per_batch=10 #Number of test cases in a single batch, testnum should be divisible by this number
 firstimage=0 #start the test inputs from this image\
-csv_name = 'test.csv'
-csv_folder = 'test_csvs'
+csv_name = '4_30_2025_full_run.csv'
+csv_folder = 'separated_csvs_4_30_25'
 
 #list of inputs start
 data_dir='data' #The directory where data files are located
