@@ -111,7 +111,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
         # Connect to Output Capacitor :)
         f.write(f"\n\n********** Output Capacitors in Layer {i+1} **********\n")
         for (x_id, y_id, split_r) in layer_keys:
-            f.write(f"C_{x_id}_{y_id}_{split_r} layer_{i+1}_{x_id}_{y_id}_{split_r}_out 0 500f\n")
+            f.write(f"C_{x_id}_{y_id}_{split_r} layer_{i+1}_{x_id}_{y_id}_{split_r}_out 0 500f IC=0V\n")
         
         # Write Input
         if i == 0:
@@ -195,7 +195,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
         # Create Capacitance Layer
         f.write(f"\n\n********** Output Capacitors in Layer {i+1} **********\n")
         for j in range(layer_output_neurons):
-            f.write(f"C_neuron{i+1}_{j+1} layer_{i+1}_neuron_output_{j+1} 0 500f\n")
+            f.write(f"C_neuron{i+1}_{j+1} layer_{i+1}_neuron_output_{j+1} 0 500f IC=0V\n")
 
 
         # From previous layers, construct how to connect things such that we have correct input and output
@@ -208,6 +208,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
             # Calculate y
             low_range_y = vert_cut[y_id-1]
             global_y_value = (low_range_y - 1) + split_r
+            real_out_name = f"layer_{i+1}_neuron_input_{global_y_value}"
 
             # Write output
             output_name = f"layer_{i+1}_{x_id}_{y_id}_{split_r}_out"
@@ -215,14 +216,26 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
             
             # Write Input Guys :)
             filepath = os.path.join('../pwl_files', f"layer_{i+1}_{x_id}_{y_id}_{split_r}_out.txt")
-            write_input_spike_file(f, f"v{n+1}", "first_net_not_used", output_name, filepath, 0, simulator='hspice', write_voltage_src=False, current_src=False)
+            first_net = f"layer_{i+1}_{x_id+1}_{global_y_value}"
+            second_net = f"layer_{i+1}_{x_id}_{global_y_value}"
+
+            if x_id == 1:
+                second_net = f"0"
+
+            if x_id == len(hor_cut)-1:
+                first_net = real_out_name
+
+            write_line_with_newline(f, f"v{n+1} {first_net} {second_net} PWL PWLFILE='{filepath}'")
+
+
+            #write_input_spike_file(f, f"v{n+1}", "first_net_not_used", output_name, filepath, 0, simulator='hspice', write_voltage_src=False, current_src=False)
 
             things_to_probe.append(f"i(v{n+1})")
-            things_to_probe.append(f"v({output_name})")
+            things_to_probe.append(f"v({first_net})")
 
             # Write resistor to connect to neuron (super small resistance :) )
-            real_out_name = f"layer_{i+1}_neuron_input_{global_y_value}"
-            f.write(f"R_{i+1}_{x_id}_{y_id}_{split_r} {output_name} {real_out_name} 1u\n")
+            # real_out_name = f"layer_{i+1}_neuron_input_{global_y_value}"
+            # f.write(f"R_{i+1}_{x_id}_{y_id}_{split_r} {output_name} {real_out_name} 1u\n")
             n+=1
         
          # Write transient analysis
