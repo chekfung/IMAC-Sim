@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 start = time.time()
 
-testnum=10 #Number of input test cases to run
+testnum=10000 #Number of input test cases to run
 testnum_per_batch=10 #Number of test cases in a single batch, testnum should be divisible by this number
 firstimage=0 #start the test inputs from this image\
 csv_name = '5_5_2025_full_run.csv'
