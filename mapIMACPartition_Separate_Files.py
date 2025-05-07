@@ -111,7 +111,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
         # Connect to Output Capacitor :)
         f.write(f"\n\n********** Output Capacitors in Layer {i+1} **********\n")
         for (x_id, y_id, split_r) in layer_keys:
-            f.write(f"C_{x_id}_{y_id}_{split_r} layer_{i+1}_{x_id}_{y_id}_{split_r}_out 0 500f IC=0V\n")
+            f.write(f"C_{x_id}_{y_id}_{split_r} layer_{i+1}_{x_id}_{y_id}_{split_r}_out 0 500f\n")
         
         # Write Input
         if i == 0:
@@ -195,7 +195,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
         # Create Capacitance Layer
         f.write(f"\n\n********** Output Capacitors in Layer {i+1} **********\n")
         for j in range(layer_output_neurons):
-            f.write(f"C_neuron{i+1}_{j+1} layer_{i+1}_neuron_output_{j+1} 0 500f IC=0V\n")
+            f.write(f"C_neuron{i+1}_{j+1} layer_{i+1}_neuron_output_{j+1} 0 500f\n")
 
 
         # From previous layers, construct how to connect things such that we have correct input and output
@@ -239,7 +239,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
             n+=1
         
          # Write transient analysis
-        f.write(".TRAN 0.1n %d*tsampling\n"%(testnum))
+        f.write(f".TRAN 0.05n {testnum}*tsampling 0 1ns\n")
 
         # Write Probes
         for guy in things_to_probe:

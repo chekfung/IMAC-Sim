@@ -17,8 +17,8 @@ start = time.time()
 testnum=10000 #Number of input test cases to run
 testnum_per_batch=10 #Number of test cases in a single batch, testnum should be divisible by this number
 firstimage=0 #start the test inputs from this image\
-csv_name = '5_5_2025_full_run.csv'
-csv_folder = 'separated_csvs_5_5_25'
+csv_name = '5_6_2025_full_run.csv'
+csv_folder = 'separated_csvs_5_6_25'
 
 #list of inputs start
 data_dir='data' #The directory where data files are located
@@ -350,9 +350,11 @@ for i in range(batch):
 
                 # Band aid fix to get rid of when latency is 0
                 if end_dynamic == start_dynamic:
-                    start_dynamic -=1
+                    print(f"ERROR END = START, TestNum: {j} Layer: {layer_num+1}, XID: {x_id}, Y_ID:{y_id}, SPLIT_R: {split_r}")
+                    end_dynamic +=1
 
                 if start_dynamic > end_dynamic:
+                    print("ERROR START > END")
                     start_dynamic = end_dynamic-1
                     
                 event_latency = time_vec[end_dynamic] - time_vec[start_dynamic]
@@ -480,9 +482,11 @@ for i in range(batch):
 
                 # Band-aid fix for latency when they are equal
                 if end_dynamic == start_dynamic:
-                    start_dynamic -=1
+                    print(f"MEOW, TestNum: {j} Layer: {layer_num+1}, Neuron: {k}")
+                    end_dynamic +=1
 
                 if start_dynamic > end_dynamic:
+                    print("ERROR, start > end")
                     start_dynamic = end_dynamic-1
 
                 event_latency = time_vec[end_dynamic] - time_vec[start_dynamic]
