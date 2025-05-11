@@ -374,8 +374,7 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
         file.write("Rconn%d_p%d nin%d_%d out%d 1m\n"% (1,1,1,1,1))
 
         # Write end of the guy
-        file.write(f".ENDS layer{LayerNUM}_{x_id+1}_{y_id+1}_{split_r+1}")
-
+        file.write(f".ENDS layer_{LayerNUM}_{x_id}_{y_id}_{split_r}")
 
     # Close All File Descriptors :)
     posw_r.close()

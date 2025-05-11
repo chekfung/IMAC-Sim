@@ -14,11 +14,11 @@ import matplotlib.pyplot as plt
 
 start = time.time()
 
-testnum=10000 #Number of input test cases to run
+testnum=10 #Number of input test cases to run
 testnum_per_batch=10 #Number of test cases in a single batch, testnum should be divisible by this number
 firstimage=0 #start the test inputs from this image\
-csv_name = '5_6_2025_full_run.csv'
-csv_folder = 'separated_csvs_5_6_25'
+csv_name = '5_9_2025_full_run.csv'
+csv_folder = 'separated_csvs_5_9_25'
 
 #list of inputs start
 data_dir='data' #The directory where data files are located
@@ -103,7 +103,7 @@ def update_diff (gain, LayerNUM):
         if 'Gain' in line:
             data[i-1]='*Differential Amplifier with Gain=' + str(gain) +'\n'
         if 'R3' in line:
-            data[i-1]='R3 n1 out ' + str(gain) +'k\n'
+            data[i-1]='R3 n1 out1 ' + str(gain) +'k\n'
         if 'R4' in line:
             data[i-1]='R4 n2 0 ' + str(gain) +'k\n'
     ff.seek(0)
@@ -301,8 +301,8 @@ for i in range(batch):
         for j in range(testnum_per_batch):
             real_image_id = (image_num + j) + firstimage
 
-            start_of_event = j * (tsampling * 10**-9)
-            end_of_event = (j+1) * (tsampling *10**-9)
+            start_of_event = (j+1) * (tsampling * 10**-9) # Plus one since starting inference is always 0 for intiialization
+            end_of_event = (j+2) * (tsampling *10**-9)  # Plus 2 since end of event (+1) but also for same reason above.
 
             # Convert to the indices that work with our SPICE simulation.
             bounds_mask = (time_vec >= start_of_event) & (time_vec <= end_of_event)
@@ -342,22 +342,60 @@ for i in range(batch):
                 # Get Output Signal
                 output_signal = get_signal(f"layer_{layer_num+1}_{x_id}_{y_id}_{split_r}_out", sim_obj, simulator='hspice')
                 subset_output = output_signal[start_index:end_index]
-                normalized_output, _, _ = min_max_normalization(subset_output)
-                subset_grad_moo = np.abs(np.diff(normalized_output))
-                subset_grad_moo = np.append(subset_grad_moo, 0)
-                first_zero = np.argmax(subset_grad_moo)  # Plus one due to movement by 1 due to np.dif
-                end_dynamic = start_index + first_zero
 
-                # Band aid fix to get rid of when latency is 0
-                if end_dynamic == start_dynamic:
-                    print(f"ERROR END = START, TestNum: {j} Layer: {layer_num+1}, XID: {x_id}, Y_ID:{y_id}, SPLIT_R: {split_r}")
-                    end_dynamic +=1
+                # Find Voltage Swing 
+                initial_voltage = output_signal[start_index]
+                end_voltage = output_signal[end_index-2]
+                voltage_swing = end_voltage-initial_voltage
+                threshold = 0.9
 
-                if start_dynamic > end_dynamic:
-                    print("ERROR START > END")
-                    start_dynamic = end_dynamic-1
+                threshold_voltage = initial_voltage + (voltage_swing * threshold)
+
+                if voltage_swing >= 0:
+                    crossing_index = np.where(subset_output >= threshold_voltage)[0]
+                else:
+                    crossing_index = np.where(subset_output <= threshold_voltage)[0]
+                #print(crossing_index)
+
+                p = len(crossing_index) - 1
+
+                while p > 0 and crossing_index[p] - crossing_index[p - 1] == 1:
+                    p -= 1
+                crossing_index = crossing_index[p]
+
+                # Interpolation between i-1 and i
+                subset_time = time_vec[start_index:end_index]
+                
+                if crossing_index == 0:
+                    # Can't interpolate before first point, fallback to index 0
+                    crossing_time = subset_time[crossing_index]
+                else:
+                    x0, y0 = subset_time[crossing_index-1], subset_output[crossing_index-1]
+                    x1, y1 = subset_time[crossing_index], subset_output[crossing_index]
+                    y_thresh = threshold_voltage
+
+                    if y1-y0 == 0:
+                        crossing_time = subset_time[crossing_index]
+                    else:
+                        crossing_time = x0 + (y_thresh - y0) / (y1 - y0) * (x1 - x0)
+
+
+                # normalized_output, _, _ = min_max_normalization(subset_output)
+                # subset_grad_moo = np.abs(np.diff(normalized_output))
+                # subset_grad_moo = np.append(subset_grad_moo, 0)
+                # first_zero = np.argmax(subset_grad_moo)  # Plus one due to movement by 1 due to np.dif
+                # end_dynamic = start_index + first_zero
+
+                # # Band aid fix to get rid of when latency is 0
+                # if end_dynamic == start_dynamic:
+                #     print(f"ERROR END = START, TestNum: {j} Layer: {layer_num+1}, XID: {x_id}, Y_ID:{y_id}, SPLIT_R: {split_r}")
+                #     end_dynamic +=1
+
+                # if start_dynamic > end_dynamic:
+                #     print("ERROR START > END")
+                #     start_dynamic = end_dynamic-1
                     
-                event_latency = time_vec[end_dynamic] - time_vec[start_dynamic]
+                event_latency = crossing_time - time_vec[start_dynamic]
 
                 if j == 0:
                     previous_output = 0
@@ -377,14 +415,14 @@ for i in range(batch):
         for x_id, y_id, split_r in layer_crossbar_items:
             # Get Output Signal
             output_signal = get_signal(f"layer_{layer_num+1}_{x_id}_{y_id}_{split_r}_out", sim_obj, simulator='hspice')
-            output_voltages = np.zeros(testnum_per_batch)
+            output_voltages = np.zeros(testnum_per_batch+1)
 
             # Get for each inference
             for m in range(testnum_per_batch):
                 real_image_id = (image_num + m) + firstimage
 
-                start_of_event = m * (tsampling * 10**-9)
-                end_of_event = (m+1) * (tsampling *10**-9)
+                start_of_event = (m+1) * (tsampling * 10**-9)
+                end_of_event = (m+2) * (tsampling *10**-9)
 
                 # Convert to the indices that work with our SPICE simulation.
                 bounds_mask = (time_vec >= start_of_event) & (time_vec <= end_of_event)
@@ -398,7 +436,7 @@ for i in range(batch):
                 # Get Truncated Output
                 truncated_output_signal = output_signal[start_index:end_index]
 
-                output_voltages[m] = truncated_output_signal[-2]
+                output_voltages[m+1] = truncated_output_signal[-1]
 
             # Create PWL File for each
             create_pwl_from_input_pulses(os.path.join(pwl_folder, f"layer_{layer_num+1}_{x_id}_{y_id}_{split_r}_out.txt"), tsampling*10**-9, (0.1*tsampling*10**-9), output_voltages)
@@ -443,8 +481,8 @@ for i in range(batch):
         for j in range(testnum_per_batch):
             real_image_id = (image_num + j) + firstimage
 
-            start_of_event = j * (tsampling * 10**-9)
-            end_of_event = (j+1) * (tsampling *10**-9)
+            start_of_event = (j+1) * (tsampling * 10**-9) # Plus 1 since first index is always 0 for initialization
+            end_of_event = (j+2) * (tsampling *10**-9)  # Plus 2 (one for end of current), (one for same reason as above)
 
             # Convert to the indices that work with our SPICE simulation.
             bounds_mask = (time_vec >= start_of_event) & (time_vec <= end_of_event)
@@ -474,22 +512,68 @@ for i in range(batch):
 
                 output_signal = get_signal(output_signal_name, sim_obj, simulator='hspice')
                 subset_output = output_signal[start_index:end_index]
-                normalized_output, _, _ = min_max_normalization(subset_output)
-                subset_grad_moo = np.abs(np.diff(normalized_output))
-                subset_grad_moo = np.append(subset_grad_moo, 0)
-                first_zero = np.argmax(subset_grad_moo)  # Plus one due to movement by 1 due to np.dif
-                end_dynamic = start_index + first_zero
 
-                # Band-aid fix for latency when they are equal
-                if end_dynamic == start_dynamic:
-                    print(f"MEOW, TestNum: {j} Layer: {layer_num+1}, Neuron: {k}")
-                    end_dynamic +=1
+                                # Find Voltage Swing 
+                initial_voltage = output_signal[start_index]
+                end_voltage = output_signal[end_index-2]
+                voltage_swing = end_voltage-initial_voltage
+                threshold = 0.9
 
-                if start_dynamic > end_dynamic:
-                    print("ERROR, start > end")
-                    start_dynamic = end_dynamic-1
+                threshold_voltage = initial_voltage + (voltage_swing * threshold)
 
-                event_latency = time_vec[end_dynamic] - time_vec[start_dynamic]
+                if voltage_swing >= 0:
+                    crossing_index = np.where(subset_output >= threshold_voltage)[0]
+                else:
+                    crossing_index = np.where(subset_output <= threshold_voltage)[0]
+                #print(crossing_index)
+
+                p = len(crossing_index) - 1
+
+                while p > 0 and crossing_index[p] - crossing_index[p - 1] == 1:
+                    p -= 1
+                crossing_index = crossing_index[p]
+
+                # Interpolation between i-1 and i
+                subset_time = time_vec[start_index:end_index]
+                
+                if crossing_index == 0:
+                    # Can't interpolate before first point, fallback to index 0
+                    crossing_time = subset_time[crossing_index]
+                else:
+                    x0, y0 = subset_time[crossing_index-1], subset_output[crossing_index-1]
+                    x1, y1 = subset_time[crossing_index], subset_output[crossing_index]
+                    y_thresh = threshold_voltage
+
+                    if y1-y0 == 0:
+                        crossing_time = subset_time[crossing_index]
+                    else:
+                        crossing_time = x0 + (y_thresh - y0) / (y1 - y0) * (x1 - x0)
+
+
+
+
+
+
+
+                # normalized_output, _, _ = min_max_normalization(subset_output)
+                # subset_grad_moo = np.abs(np.diff(normalized_output))
+                # subset_grad_moo = np.append(subset_grad_moo, 0)
+                # first_zero = np.argmax(subset_grad_moo)  # Plus one due to movement by 1 due to np.dif
+                # end_dynamic = start_index + first_zero
+
+                # # Band-aid fix for latency when they are equal
+                # if end_dynamic == start_dynamic:
+                #     print(f"MEOW, TestNum: {j} Layer: {layer_num+1}, Neuron: {k}")
+                #     end_dynamic +=1
+
+                # if start_dynamic > end_dynamic:
+                #     print("ERROR, start > end")
+                #     start_dynamic = end_dynamic-1
+
+                event_latency = crossing_time - time_vec[start_dynamic]
+
+                if event_latency == 0.0:
+                    event_latency = time_vec[start_dynamic+1] - time_vec[start_dynamic]
 
                 # Output and Previous Output
                 if j == 0:
@@ -505,7 +589,7 @@ for i in range(batch):
         # Write PWL Files
         for k in range(layer_output_neurons):
             # output vector definition
-            output_voltages = np.zeros(testnum_per_batch)
+            output_voltages = np.zeros(testnum_per_batch+1)
 
             # Get signal
             output_signal_name = f"layer_{layer_num+1}_neuron_output_{k+1}"
@@ -514,8 +598,8 @@ for i in range(batch):
             for m in range(testnum_per_batch):
                 real_image_id = (image_num + m) + firstimage
 
-                start_of_event = m * (tsampling * 10**-9)
-                end_of_event = (m+1) * (tsampling *10**-9)
+                start_of_event = (m+1) * (tsampling * 10**-9)
+                end_of_event = (m+2) * (tsampling *10**-9)
 
                 # Convert to the indices that work with our SPICE simulation.
                 bounds_mask = (time_vec >= start_of_event) & (time_vec <= end_of_event)
@@ -529,7 +613,7 @@ for i in range(batch):
                 # Get Truncated Output
                 truncated_output_signal = output_signal[start_index:end_index]
 
-                output_voltages[m] = truncated_output_signal[-2]
+                output_voltages[m+1] = truncated_output_signal[-1]
 
             create_pwl_from_input_pulses(os.path.join(pwl_folder, f"neuron_{layer_num+1}_{k}_out.txt"), tsampling*10**-9, (0.1*tsampling*10**-9), output_voltages)
 

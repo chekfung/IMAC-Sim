@@ -25,7 +25,8 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
         #f.write(".include 'neuron.sp'\n")
         #f.write(".option post \n") # Post causes everything to get spit out :)
         f.write('.option ingold=2 artist=2 psf=2\n')
-        f.write('.OPTION DELMAX=1NS\n')
+        f.write('.OPTION DELMAX=.1NS\n')
+        f.write('.OPTION RELTOL=1e-6 ABSTOL=1e-12 VABSTOL=1e-12\n')
         f.write('.option probe\n')
         f.write(".op\n")
         f.write(".PARAM VddVal=%f\n"%vdd)
@@ -123,8 +124,12 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
                 f.write("v%d layer_0_in%d 0 PWL( 0n 0 "%(line+1,line+1))
                 things_to_probe.append(f"i(v{line+1})")
                 things_to_probe.append(f"v(layer_0_in{line+1})")
-                for image in range(testnum):
-                    f.write("%fn %f %fn %f "%(image*tsampling+(0.1*tsampling),input_num[line+image*nodes[0]],(image+1)*tsampling,input_num[line+image*nodes[0]]))
+                for image in range(testnum+1):
+                    if image == 0:
+                        # Set everything to zero in the first stage in order to have everything settle first.
+                        f.write("%fn %f %fn %f "%(image*tsampling+(0.1*tsampling),0,(image+1)*tsampling,0))
+                    else:
+                        f.write("%fn %f %fn %f "%(image*tsampling+(0.1*tsampling),input_num[line+(image-1)*nodes[0]],(image+1)*tsampling,input_num[line+(image-1)*nodes[0]]))
                 f.write(")\n")
             c.close()
         else:
@@ -141,7 +146,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
                 things_to_probe.append(f"v({name})")
 
         # Write transient analysis
-        f.write(".TRAN 0.1n %d*tsampling\n"%(testnum))
+        f.write(".TRAN 0.1n %d*tsampling\n"%(testnum+1))
 
         # Write Probes
         for guy in things_to_probe:
@@ -173,7 +178,8 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
         f.write(".include 'neuron.sp'\n")
         #f.write(".option post \n") # Post causes everything to get spit out :)
         f.write('.option ingold=2 artist=2 psf=2\n')
-        f.write('.OPTION DELMAX=1NS\n')
+        f.write('.OPTION DELMAX=.1NS\n')
+        f.write('.OPTION RELTOL=1e-6 ABSTOL=1e-12 VABSTOL=1e-12\n')
         f.write('.option probe\n')
         f.write(".op\n")
         f.write(".PARAM VddVal=%f\n"%vdd)
@@ -239,7 +245,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
             n+=1
         
          # Write transient analysis
-        f.write(f".TRAN 0.05n {testnum}*tsampling 0 1ns\n")
+        f.write(f".TRAN 0.05n {testnum+1}*tsampling 0 1ns\n")
 
         # Write Probes
         for guy in things_to_probe:
@@ -249,7 +255,7 @@ def mapIMAC(nodes,xbar_length,hpar,vpar,metal,T,H,L,W,D,eps,rho,weight_var,testn
         if i == len(nodes)-2:
             for test in range(testnum):
                 for j in range(nodes[len(nodes)-1]):
-                    f.write(".MEAS TRAN VOUT%d_%d FIND v(layer_3_neuron_output_%d) AT=%d*tsampling\n"%(j,test,j+1,test+1))
+                    f.write(".MEAS TRAN VOUT%d_%d FIND v(layer_3_neuron_output_%d) AT=%d*tsampling\n"%(j,test+1,j+1,test+2))
 
         # Write .end :)
         f.write(".end")
