@@ -14,11 +14,11 @@ import matplotlib.pyplot as plt
 
 start = time.time()
 
-testnum=10 #Number of input test cases to run
+testnum=10000 #Number of input test cases to run
 testnum_per_batch=10 #Number of test cases in a single batch, testnum should be divisible by this number
 firstimage=0 #start the test inputs from this image\
-csv_name = '5_12_25_test.csv'#'5_11_2025_DIGITAL_NEURON.csv'
-csv_folder = 'separated_csvs_5_12_25_TEST'#'separated_csvs_5_11_25_DIGITAL_NEURON'
+csv_name = '5_12_25_8_bit_quantization.csv'#'5_11_2025_DIGITAL_NEURON.csv'
+csv_folder = 'separated_csvs_5_12_25_8_bit_quantization'#'separated_csvs_5_11_25_DIGITAL_NEURON'
 
 # Quantization Constants
 USE_QUANTIZATION = True
@@ -486,7 +486,7 @@ for i in range(batch):
         # TODO: ADD QUANTIZATION HERE
         if USE_QUANTIZATION:
             for time_guy in range(testnum_per_batch):
-                input_digital_neuron_signals[:,time_guy] = dac(adc(input_digital_neuron_signals[:, time_guy+1], bits=DAC_BITS), bits=DAC_BITS)
+                input_digital_neuron_signals[:,time_guy+1] = dac(adc(input_digital_neuron_signals[:, time_guy+1], bits=DAC_BITS), bits=DAC_BITS)
 
         ## Neuron to run
         # Trained Inverse Sigmoid Neuron from IMAC-SIM
@@ -497,7 +497,7 @@ for i in range(batch):
 
         # TODO: ADD QUANTIZATION HERE
         for time_guy in range(testnum_per_batch):
-            layer_neuron_outputs[:,time_guy+1] = dac(adc(layer_neuron_outputs[:,time_guy+1], bits=DAC_BITS), bits=DAC_BITS)
+            layer_neuron_outputs[:,time_guy] = dac(adc(layer_neuron_outputs[:,time_guy], bits=DAC_BITS), bits=DAC_BITS)
 
         if layer_num == len(nodes)-2:
             for test_id in range(testnum_per_batch):
