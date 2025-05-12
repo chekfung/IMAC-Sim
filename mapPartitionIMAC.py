@@ -4,10 +4,8 @@ import random
 import numpy as np
 import resource
 import os
-
-# FIXME: I think they do some fundamentally interesting stuff here...
-#        First off, they consider ideal op-amps.
-#        Second off, they don't actually have 32x32 partitions, but make their partitions such that they fit the actual guy, which is incorrect.
+import pandas as pd
+from collections import defaultdict
 
 # Quick Band Aid Fix to Make My Life a little easier :)
 # Increase the number of files I can open at a time 
@@ -123,6 +121,9 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
     # We split vpar since we have 32x1 based mac units.
     open_fd = {}    # Index into this using hpar, vpar, split_vpar index
 
+    #positive_weights = defaultdict(list)
+    #negative_weights = defaultdict(list)
+
     for x_id in range(hpar):
         for y_id in range(vpar):
             # Vertical refers to having to split up input into multiple :)
@@ -178,6 +179,7 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
                 x_id, split_c = find_partition(horizontal_cuts, c)
                 #print(f"Row: {r}, Col: {c}, X_ID: {x_id}, Y_ID: {y_id}, X_PAR: {split_c}, Y_PAR: {split_r}")
                 open_fd[(x_id, y_id, split_r)].write("Rwpos%d_%d in%d_%d sp%d_%d %f\n"% (split_c,split_r, split_c,split_r,split_c,split_r,float(line)))
+                #positive_weights[(x_id, y_id, split_r)].append(float(line))
 
                 #layer_w.write("Rwpos%d_%d_%d in%d_%d sp%d_%d %f\n"% (c,r, n_hpar, c,r,c,r,float(line)))
                 r+=1
@@ -196,6 +198,7 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
                 #print(f"Row: {r}, Col: {c}, X_ID: {x_id}, Y_ID: {y_id}, X_PAR: {split_c}, Y_PAR: {split_r}")
 
                 open_fd[(x_id, y_id, split_r)].write("Rwpos%d_%d in%d_%d sp%d_%d %f\n"% (split_c,split_r, split_c,split_r,split_c,split_r,float(line)))
+                #positive_weights[(x_id, y_id, split_r)].append(float(line))
                 #layer_w.write("Rwpos%d_%d_%d in%d_%d sp%d_%d %f\n"% (c,r,n_hpar, c,r,c,r,float(line)))
                 r+=1
         else:
@@ -219,6 +222,7 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
 
         for new_c in range(low_index, high_index+1):
             open_fd[(x_id, y_id, split_r)].write("Rwpos%d_%d in%d_%d 0 %f\n"% (new_c,split_r, new_c,split_r, low_resistance))
+            #positive_weights[(x_id, y_id, split_r)].append(float(low_resistance))
 
 
     # Write Negative Array
@@ -239,6 +243,7 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
                 x_id, split_c = find_partition(horizontal_cuts, c)
                 #print(f"Row: {r}, Col: {c}, X_ID: {x_id}, Y_ID: {y_id}, X_PAR: {split_c}, Y_PAR: {split_r}")
                 open_fd[(x_id, y_id, split_r)].write("Rwneg%d_%d in%d_%d sn%d_%d %f\n"% (split_c,split_r,split_c,split_r,split_c,split_r,float(line)))
+                #negative_weights[(x_id, y_id, split_r)].append(float(line))
 
                 #layer_w.write("Rwneg%d_%d in%d_%d sn%d_%d %f\n"% (c,r,c,r,c,r,float(line)))
                 r+=1;
@@ -252,6 +257,7 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
                 x_id, split_c = find_partition(horizontal_cuts, c)
                 #print(f"Row: {r}, Col: {c}, X_ID: {x_id}, Y_ID: {y_id}, X_PAR: {split_c}, Y_PAR: {split_r}")
                 open_fd[(x_id, y_id, split_r)].write("Rwneg%d_%d in%d_%d sn%d_%d %f\n"% (split_c,split_r,split_c,split_r,split_c,split_r,float(line)))
+                #negative_weights[(x_id, y_id, split_r)].append(float(line))
 
                 #layer_w.write("Rwneg%d_%d in%d_%d sn%d_%d %f\n"% (c,r,c,r,c,r,float(line)))
                 r+=1;
@@ -275,6 +281,7 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
 
         for new_c in range(low_index, high_index+1):
             open_fd[(x_id, y_id, split_r)].write("Rwneg%d_%d in%d_%d 0 %f\n"% (new_c,split_r, new_c,split_r, low_resistance))
+            #negative_weights[(x_id, y_id, split_r)].append(float(low_resistance))
 
 
     # Write 0 bias numbers for partitions where there is nothing happening :)
@@ -289,10 +296,11 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
             for split_vpar in range(new_range):
                 open_fd[(i+1, vpar_index, split_vpar+1)].write("\n\n**********Zero Positive Biases**********\n")
                 open_fd[(i+1, vpar_index, split_vpar+1)].write("Rbpos%d vd%d sp%d_%d %f\n"% (1,1,xbar_length+1,split_vpar+1, low_resistance))
+                #positive_weights[(i+1, vpar_index, split_vpar+1)].append(float(low_resistance))
 
                 open_fd[(i+1, vpar_index, split_vpar+1)].write("\n\n**********Zero Negative Biases**********\n")
                 open_fd[(i+1, vpar_index, split_vpar+1)].write("Rbneg%d vd%d sn%d_%d %f\n"% (1,1,xbar_length+1,split_vpar+1,low_resistance))
-
+                #negative_weights[(i+1, vpar_index, split_vpar+1)].append(float(low_resistance))
                 
 
     # Biases need to be written for every vertical partition, but only for the last horizontal partition
@@ -311,6 +319,7 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
 
             if (float(line) != 0):
                 open_fd[(hpar, vpar_index, split_vpar+1)].write("Rbpos%d vd%d sp%d_%d %f\n"% (1,1,xbar_length+1,split_vpar+1,float(line)))
+                #positive_weights[(hpar, vpar_index, split_vpar+1)].append(float(line))
 
 
             # Write negative bias
@@ -320,7 +329,20 @@ def mapPartition(layer1,layer2, xbar_length, LayerNUM,hpar,vpar,metal,T,H,L,W,D,
 
             if (float(line) != 0):
                 open_fd[(hpar, vpar_index, split_vpar+1)].write("Rbneg%d vd%d sn%d_%d %f\n"% (1,1,xbar_length+1,split_vpar+1,float(line)))
+               # negative_weights[(hpar, vpar_index, split_vpar+1)].append(float(line))
 
+    # # Create weights and biases file :)
+    # df1 = pd.DataFrame.from_dict(positive_weights, orient='index')
+    # df2 = pd.DataFrame.from_dict(negative_weights, orient='index')
+
+    # # Calculate the difference and apply np.sign to get -1, 0, or 1
+    # weights = np.sign(df2.values - df1.values)
+
+    # # Create a new DataFrame with the same index and column structure
+    # weights_df = pd.DataFrame(weights, index=df1.index, columns=[f'index_{i}' for i in range(df1.shape[1])])
+
+    # # Export to CSV
+    # weights_df.to_csv(f"weights_output_{LayerNUM}.csv")
 
     # writing the circuit for vertical line parasitic resistances (only one vertical line for each row BTW)
     parasitic_res = rho_new*W/(metal*T)

@@ -1,1 +1,1 @@
-Number of wrong recognitions in 10000 input image(s) = 372
+Number of wrong recognitions in 10000 input image(s) = 375

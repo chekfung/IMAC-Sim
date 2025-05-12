@@ -14,11 +14,11 @@ import matplotlib.pyplot as plt
 
 start = time.time()
 
-testnum=10 #Number of input test cases to run
+testnum=10000 #Number of input test cases to run
 testnum_per_batch=10 #Number of test cases in a single batch, testnum should be divisible by this number
 firstimage=0 #start the test inputs from this image\
-csv_name = '5_9_2025_full_run.csv'
-csv_folder = 'separated_csvs_5_9_25'
+csv_name = '5_10_2025_full_run.csv'
+csv_folder = 'separated_csvs_5_10_25'
 
 #list of inputs start
 data_dir='data' #The directory where data files are located
@@ -396,6 +396,9 @@ for i in range(batch):
                 #     start_dynamic = end_dynamic-1
                     
                 event_latency = crossing_time - time_vec[start_dynamic]
+
+                if event_latency == 0.0:
+                    event_latency = time_vec[start_dynamic+1] - time_vec[start_dynamic]
 
                 if j == 0:
                     previous_output = 0
