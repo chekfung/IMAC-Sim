@@ -427,9 +427,6 @@ for i in range(batch):
                     
                 event_latency = crossing_time - time_vec[start_dynamic]
 
-                if event_latency == 0.0:
-                    event_latency = time_vec[start_dynamic+1] - time_vec[start_dynamic]
-
                 if j == 0:
                     previous_output = 0
                 else:
